@@ -1,0 +1,123 @@
+#!/usr/bin/env python3
+"""
+Generate a clean, high-quality SVG month calendar and copy it to the
+Wayland clipboard (Omarchy / Hyprland) so you can paste straight into Excalidraw.
+
+Usage:
+    python calendar_svg.py YEAR MONTH [--sun] [--svg-mime] [-o OUTFILE]
+
+Examples:
+    python calendar_svg.py 2026 8              # August 2026 -> clipboard
+    python calendar_svg.py 2026 12 --sun       # Sunday-start weeks
+    python calendar_svg.py 2027 1 -o jan.svg   # also save a file
+    python calendar_svg.py 2026 8 --svg-mime   # copy as image/svg+xml instead of text
+
+Then in Excalidraw: Ctrl+V. (Right-click -> Send to back, then Lock, to draw on top.)
+
+Needs: python3, wl-clipboard (preinstalled on Omarchy).
+"""
+import argparse
+import calendar
+import subprocess
+import sys
+
+
+def make_svg(year, month, week_start="mon"):
+    W, H, pad = 1400, 1000, 40
+    firstweekday = 0 if week_start == "mon" else 6
+    cal = calendar.Calendar(firstweekday=firstweekday)
+    weeks = cal.monthdayscalendar(year, month)   # 0 = padding day
+    n_rows = len(weeks)
+
+    header_y, header_h = 108, 54
+    grid_top = header_y + header_h
+    grid_bottom = H - pad
+    grid_h = grid_bottom - grid_top
+    row_h = grid_h / n_rows
+    grid_w = W - 2 * pad
+    col_w = grid_w / 7
+
+    if week_start == "mon":
+        labels = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"]
+        weekend_cols = {5, 6}
+    else:
+        labels = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"]
+        weekend_cols = {0, 6}
+
+    month_name = calendar.month_name[month]
+    s = []
+    s.append(f'<svg viewBox="0 0 {W} {H}" xmlns="http://www.w3.org/2000/svg" '
+             f'font-family="Segoe UI, system-ui, -apple-system, Helvetica, Arial, sans-serif">')
+    s.append(f'<rect x="0" y="0" width="{W}" height="{H}" fill="#ffffff"/>')
+
+    s.append(f'<text x="{pad}" y="66" font-size="44" font-weight="700" '
+             f'fill="#2b2a27">{month_name} {year}</text>')
+
+    for c, lab in enumerate(labels):
+        x = pad + c * col_w + 14
+        color = "#8a8a86"
+        s.append(f'<text x="{x:.2f}" y="{header_y + 36}" font-size="20" '
+                 f'font-weight="600" letter-spacing="2" fill="{color}">{lab}</text>')
+
+    for r, week in enumerate(weeks):
+        for c, day in enumerate(week):
+            if day == 0:
+                continue
+            x = pad + c * col_w + 16
+            y = grid_top + r * row_h + 47
+            s.append(f'<text x="{x:.2f}" y="{y:.2f}" font-size="27" '
+                     f'font-weight="500" fill="#33322f">{day}</text>')
+
+    stroke = 'stroke="#dcdcda" stroke-width="1.5"'
+    for r in range(n_rows + 1):
+        y = grid_top + r * row_h
+        s.append(f'<line x1="{pad}" y1="{y:.2f}" x2="{W-pad}" y2="{y:.2f}" {stroke}/>')
+    for c in range(8):
+        x = pad + c * col_w
+        s.append(f'<line x1="{x:.2f}" y1="{grid_top:.2f}" x2="{x:.2f}" '
+                 f'y2="{grid_bottom:.2f}" {stroke}/>')
+    s.append(f'<line x1="{pad}" y1="{header_y:.2f}" x2="{W-pad}" y2="{header_y:.2f}" {stroke}/>')
+
+    s.append('</svg>')
+    return "\n".join(s)
+
+
+def copy_to_clipboard(data, svg_mime=False):
+    cmd = ["wl-copy"]
+    if svg_mime:
+        cmd += ["--type", "image/svg+xml"]
+    try:
+        subprocess.run(cmd, input=data.encode(), check=True)
+        return True
+    except FileNotFoundError:
+        print("wl-copy not found. Install it with: sudo pacman -S wl-clipboard",
+              file=sys.stderr)
+    except subprocess.CalledProcessError as e:
+        print(f"wl-copy failed (is a Wayland session running?): {e}", file=sys.stderr)
+    return False
+
+
+def main():
+    p = argparse.ArgumentParser(description="SVG month calendar -> clipboard (Wayland).")
+    p.add_argument("year", type=int)
+    p.add_argument("month", type=int, help="1-12")
+    p.add_argument("--sun", action="store_true", help="start weeks on Sunday")
+    p.add_argument("--svg-mime", action="store_true",
+                   help="copy as image/svg+xml instead of plain text")
+    p.add_argument("-o", "--out", help="also save the SVG to this file")
+    a = p.parse_args()
+
+    svg = make_svg(a.year, a.month, "sun" if a.sun else "mon")
+
+    if copy_to_clipboard(svg, a.svg_mime):
+        print(f"Copied {calendar.month_name[a.month]} {a.year} to clipboard "
+              f"-> paste into Excalidraw with Ctrl+V")
+
+    if a.out:
+        with open(a.out, "w") as f:
+            f.write(svg)
+        print("Saved", a.out)
+
+
+if __name__ == "__main__":
+    main()

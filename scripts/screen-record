@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+DIR="$HOME/Videos/Recordings"
+
+mkdir -p "$DIR"
+
+FILE="$DIR/$(date '+%Y-%m-%d_%H-%M-%S').mkv"
+
+GEOMETRY="$(slurp)"
+
+if [[ -z "$GEOMETRY" ]]; then
+    exit 0
+fi
+
+notify-send "Screen recording" "Recording started"
+
+ffmpeg \
+    -f lavfi \
+    -i "color=size=1x1:rate=1" \
+    -f pulse \
+    -i default \
+    -f x11grab \
+    -video_size 1x1 \
+    -i :0 \
+    "$FILE"

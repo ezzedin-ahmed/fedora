@@ -1,0 +1,222 @@
+#!/usr/bin/env bash
+#
+# gitcheck — a bird's-eye view of uncommitted and unpushed work across many repos.
+#
+#   gitcheck                 scan ~/Projects
+#   gitcheck ~/work -f       scan ~/work, fetching remotes first
+#   gitcheck -q              only list repos that need attention
+#
+# Exit status: 0 if everything is clean and pushed, 1 if something needs attention.
+
+set -uo pipefail
+
+ROOT="${GITCHECK_ROOT:-$HOME/Projects}"
+MAXDEPTH=4
+DO_FETCH=0
+DIRTY_ONLY=0
+VERBOSE=0
+COLOR_MODE=auto
+
+usage() {
+    cat <<'EOF'
+Usage: gitcheck [options] [directory]
+
+Scans a directory tree for git repositories and reports, for each one,
+anything that is not safely committed and pushed.
+
+Options:
+  -d, --depth N     how deep to search for repos (default: 4)
+  -f, --fetch       run `git fetch --prune` first so ahead/behind is accurate
+  -q, --dirty-only  hide repos that are clean and fully pushed
+  -v, --verbose     also list the changed files (up to 5 per repo)
+      --no-color    disable colours
+  -h, --help        show this help
+
+Notes:
+  Nested repos (submodules, vendored checkouts) are skipped.
+  The default root can be changed with the GITCHECK_ROOT environment variable.
+EOF
+}
+
+die() { printf 'gitcheck: %s\n' "$*" >&2; exit 2; }
+
+# ---------------------------------------------------------------- arguments --
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -d|--depth)      [[ ${2:-} =~ ^[0-9]+$ ]] || die "--depth needs a number"
+                         MAXDEPTH=$2; shift 2 ;;
+        -f|--fetch)      DO_FETCH=1;   shift ;;
+        -q|--dirty-only) DIRTY_ONLY=1; shift ;;
+        -v|--verbose)    VERBOSE=1;    shift ;;
+        --no-color)      COLOR_MODE=never; shift ;;
+        -h|--help)       usage; exit 0 ;;
+        --)              shift; break ;;
+        -*)              die "unknown option '$1' (try --help)" ;;
+        *)               ROOT=$1; shift ;;
+    esac
+done
+
+command -v git >/dev/null || die "git is not installed"
+ROOT=${ROOT/#\~/$HOME}
+[[ -d $ROOT ]] || die "'$ROOT' is not a directory"
+
+# ------------------------------------------------------------------- style ---
+if [[ $COLOR_MODE == auto && -t 1 && -z ${NO_COLOR:-} ]]; then
+    B=$'\e[1m'; D=$'\e[2m'; R=$'\e[0m'
+    RED=$'\e[31m'; GRN=$'\e[32m'; YLW=$'\e[33m'
+    BLU=$'\e[34m'; MAG=$'\e[35m'; CYN=$'\e[36m'
+else
+    B=''; D=''; R=''; RED=''; GRN=''; YLW=''; BLU=''; MAG=''; CYN=''
+fi
+
+if [[ ${LC_ALL:-${LC_CTYPE:-${LANG:-}}} == *[Uu][Tt][Ff]* ]]; then
+    OK='✔'; BAD='✖'; WARN='▲'; UP='↑'; DOWN='↓'; FLAG='⚑'
+    TL='╭'; TR='╮'; BL='╰'; BR='╯'; H='─'; V='│'
+else
+    OK='+'; BAD='!'; WARN='*'; UP='^'; DOWN='v'; FLAG='#'
+    TL='+'; TR='+'; BL='+'; BR='+'; H='-'; V='|'
+fi
+
+rule() { local n=$1 s=''; while ((n--)); do s+=$H; done; printf '%s' "$s"; }
+
+# ---------------------------------------------------------- find the repos ---
+mapfile -d '' -t gitpaths < <(
+    find "$ROOT" -maxdepth "$MAXDEPTH" \
+         \( -type d \( -name node_modules -o -name .cache \) -prune \) -o \
+         \( -name .git -print0 \) 2>/dev/null | sort -z
+)
+
+repos=(); parent=''
+for g in ${gitpaths[@]+"${gitpaths[@]}"}; do
+    repo=${g%/.git}
+    [[ -n $parent && $repo == "$parent"/* ]] && continue   # nested repo / submodule
+    repos+=("$repo"); parent=$repo
+done
+
+pretty_root=${ROOT/#$HOME/\~}
+
+if [[ ${#repos[@]} -eq 0 ]]; then
+    printf '%s  no git repositories found under %s%s\n' "$D" "$pretty_root" "$R"
+    exit 0
+fi
+
+# ------------------------------------------------------------------ header ---
+title=" git overview  ${pretty_root}  (${#repos[@]} repos) "
+printf '\n%s%s%s%s%s\n' "$B" "$TL" "$(rule ${#title})" "$TR" "$R"
+printf '%s%s%s%s%s%s\n'  "$B" "$V" "$R$B" "$title" "$B$V" "$R"
+printf '%s%s%s%s%s\n\n'  "$B" "$BL" "$(rule ${#title})" "$BR" "$R"
+
+# ------------------------------------------------------------------- fetch ---
+if (( DO_FETCH )); then
+    for repo in "${repos[@]}"; do
+        printf '%s  fetching %s…%s\r' "$D" "$(basename "$repo")" "$R"
+        git -C "$repo" fetch --all --prune --quiet 2>/dev/null
+    done
+    printf '\e[2K'
+fi
+
+# ------------------------------------------------------- column alignment ----
+name_w=0
+for repo in "${repos[@]}"; do
+    n=${repo#"$ROOT"/}; n=${n:-$(basename "$repo")}
+    (( ${#n} > name_w )) && name_w=${#n}
+done
+(( name_w > 34 )) && name_w=34
+
+pad() { local s=$1 w=$2; printf '%s' "$s"; local i=$(( w - ${#s} )); while ((i-- > 0)); do printf ' '; done; }
+
+# -------------------------------------------------------------- inspection ---
+total=${#repos[@]}; n_clean=0; n_dirty=0; n_unpushed=0; n_other=0
+
+for repo in "${repos[@]}"; do
+    name=${repo#"$ROOT"/}; name=${name:-$(basename "$repo")}
+    (( ${#name} > 34 )) && name="…${name: -33}"
+
+    staged=0; modified=0; untracked=0; conflicts=0; files=()
+
+    while IFS= read -r line; do
+        x=${line:0:1}; y=${line:1:1}
+        if [[ $x == '?' ]]; then
+            (( untracked++ ))
+        elif [[ $x == U || $y == U || ${line:0:2} == DD || ${line:0:2} == AA ]]; then
+            (( conflicts++ ))
+        else
+            [[ $x != ' ' ]] && (( staged++ ))
+            [[ $y != ' ' ]] && (( modified++ ))
+        fi
+        (( ${#files[@]} < 5 )) && files+=("${line:0:2}|${line:3}")
+    done < <(git -C "$repo" status --porcelain 2>/dev/null)
+
+    branch=$(git -C "$repo" symbolic-ref --quiet --short HEAD 2>/dev/null)
+    detached=0
+    if [[ -z $branch ]]; then
+        branch="$(git -C "$repo" rev-parse --short HEAD 2>/dev/null)"
+        [[ -n $branch ]] && { branch="detached@$branch"; detached=1; } || branch='(no commits)'
+    fi
+
+    stashes=$(git -C "$repo" stash list 2>/dev/null | wc -l | tr -d ' ')
+
+    ahead=0; behind=0; unpublished=0; gone=0
+    while IFS=$'\t' read -r _br up track; do
+        if [[ -z $up ]]; then
+            (( unpublished++ )); continue
+        fi
+        [[ $track == *gone* ]]                && (( gone++ ))
+        [[ $track =~ ahead\ ([0-9]+)  ]]      && (( ahead  += BASH_REMATCH[1] ))
+        [[ $track =~ behind\ ([0-9]+) ]]      && (( behind += BASH_REMATCH[1] ))
+    done < <(git -C "$repo" for-each-ref --format='%(refname:short)%09%(upstream:short)%09%(upstream:track,nobracket)' refs/heads 2>/dev/null)
+
+    dirty=$(( staged + modified + untracked + conflicts ))
+    unpushed=$(( ahead + unpublished ))
+    attention=$(( dirty + unpushed + conflicts + gone ))
+
+    (( dirty    > 0 )) && (( n_dirty++ ))
+    (( unpushed > 0 )) && (( n_unpushed++ ))
+    (( attention == 0 )) && (( n_clean++ ))
+
+    (( DIRTY_ONLY && attention == 0 )) && continue
+
+    # ---- icon
+    if   (( conflicts > 0 ));  then icon="$RED$BAD$R"
+    elif (( attention > 0 ));  then icon="$YLW$BAD$R"
+    elif (( behind > 0 || stashes > 0 || detached )); then icon="$BLU$WARN$R"
+    else                            icon="$GRN$OK$R"
+    fi
+
+    # ---- badges
+    badges=''
+    (( conflicts > 0 )) && badges+="$RED${BAD}${conflicts} conflict$R  "
+    (( staged    > 0 )) && badges+="$GRN+${staged} staged$R  "
+    (( modified  > 0 )) && badges+="$YLW~${modified} modified$R  "
+    (( untracked > 0 )) && badges+="$CYN?${untracked} new$R  "
+    (( ahead     > 0 )) && badges+="$BLU${UP}${ahead} unpushed$R  "
+    (( behind    > 0 )) && badges+="$D${DOWN}${behind} behind$R  "
+    (( unpublished > 0 )) && badges+="$MAG${UP}${unpublished} unpublished branch$( ((unpublished>1)) && printf es)$R  "
+    (( gone      > 0 )) && badges+="$RED${gone} upstream gone$R  "
+    (( stashes   > 0 )) && badges+="$MAG${FLAG}${stashes} stash$R  "
+    (( detached ))      && badges+="${YLW}detached HEAD$R  "
+    [[ -z $badges ]]    && badges="${D}clean${R}"
+
+    printf '  %s  %s%s%s  %s%s%s  %s\n' \
+        "$icon" "$B" "$(pad "$name" "$name_w")" "$R" \
+        "$D" "$(pad "$branch" 18)" "$R" "${badges%"  "}"
+
+    if (( VERBOSE )) && (( ${#files[@]} > 0 )); then
+        for f in "${files[@]}"; do
+            printf '        %s%-3s%s %s%s%s\n' "$D" "${f%%|*}" "$R" "$D" "${f#*|}" "$R"
+        done
+        (( dirty > 5 )) && printf '        %s… and %d more%s\n' "$D" $(( dirty - 5 )) "$R"
+    fi
+done
+
+# ----------------------------------------------------------------- summary ---
+n_other=$(( total - n_clean ))
+printf '\n%s%s%s\n' "$D" "$(rule 62)" "$R"
+printf '  %s%d%s repos   %s%s %d clean%s   %s%s %d with local changes%s   %s%s %d with unpushed commits%s\n\n' \
+    "$B" "$total" "$R" \
+    "$GRN" "$OK" "$n_clean" "$R" \
+    "$YLW" "$BAD" "$n_dirty" "$R" \
+    "$BLU" "$UP" "$n_unpushed" "$R"
+
+(( n_other > 0 )) && exit 1
+exit 0

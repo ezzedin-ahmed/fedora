@@ -1,0 +1,84 @@
+#!/usr/bin/env bash
+#
+# tmux-sessionizer — fzf over git repos in ~/Projects (max 2 levels deep).
+#
+#   Picking a repo attaches to its session, creating it only if it doesn't
+#   exist yet. Layout: window 1 = nvim, windows 2-4 = bash, all cwd'd to
+#   the repo root. Detach with `prefix d`; picking the same repo again
+#   drops you back into the running session.
+#
+# Usage: tmux-sessionizer [initial-fzf-query]
+
+set -euo pipefail
+
+PROJECTS_ROOT="${PROJECTS_ROOT:-$HOME/Projects}"
+EXTRA_WINDOWS=3
+
+die() {
+  printf '%s: %s\n' "${0##*/}" "$1" >&2
+  exit 1
+}
+
+command -v tmux >/dev/null 2>&1 || die "tmux is not installed"
+command -v fzf >/dev/null 2>&1 || die "fzf is not installed"
+[[ -d $PROJECTS_ROOT ]] || die "$PROJECTS_ROOT does not exist"
+
+# Repos one or two levels below the root, i.e. .git at depth 2 or 3.
+# -prune stops find from walking into the repo itself. No -type, so
+# worktrees and submodules (where .git is a file) are picked up too.
+list_repos() {
+  local git_path rel
+  while IFS= read -r git_path; do
+    rel=${git_path%/.git}
+    rel=${rel#"$PROJECTS_ROOT"/}
+    printf '%s\n' "$rel"
+  done < <(find "$PROJECTS_ROOT" -mindepth 2 -maxdepth 3 -name .git -print -prune 2>/dev/null) |
+    sort
+}
+
+# ~/Projects/work/api-server -> work_api-server
+# Dots and colons are stripped because tmux uses them as target separators.
+session_name() {
+  local name=${1//\//_}
+  name=${name//[.:[:space:]]/_}
+  printf '%s' "$name"
+}
+
+main() {
+  local repos selected dir session nvim_win i
+
+  repos=$(list_repos)
+  [[ -n $repos ]] || die "no git repositories found under $PROJECTS_ROOT"
+
+  selected=$(fzf --prompt='repo> ' --height=40% --reverse \
+    --select-1 --exit-0 --query="${1:-}" <<<"$repos") || exit 0
+  [[ -n $selected ]] || exit 0
+
+  dir="$PROJECTS_ROOT/$selected"
+  session=$(session_name "$selected")
+
+  # "=" forces an exact match; without it tmux would happily resolve
+  # "api" to an existing "api-server" session.
+  if ! tmux has-session -t "=$session" 2>/dev/null; then
+    nvim_win=$(tmux new-session -d -P -F '#{window_id}' \
+      -s "$session" -c "$dir")
+
+    # send-keys instead of running nvim as the window command, so that
+    # quitting nvim leaves you in a shell rather than killing the window.
+    tmux send-keys -t "$nvim_win" 'nvim .' C-m
+
+    for ((i = 0; i < EXTRA_WINDOWS; i++)); do
+      tmux new-window -d -t "=$session:" -c "$dir"
+    done
+
+    tmux select-window -t "$nvim_win"
+  fi
+
+  if [[ -n ${TMUX:-} ]]; then
+    tmux switch-client -t "=$session"
+  else
+    tmux attach-session -t "=$session"
+  fi
+}
+
+main "$@"

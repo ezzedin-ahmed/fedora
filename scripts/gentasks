@@ -1,0 +1,230 @@
+#!/usr/bin/env python3
+"""
+gentasks.py - generate numbered recurring markdown tasks on given weekdays
+
+Usage:
+  ./gentasks.py "<task name>" <count> <days> [start-date] [-i start-index]
+
+days: comma-separated weekday abbreviations (sat,sun,mon,tue,wed,thu,fri)
+start-date: any date format (default: today)
+start-index: first task number (default: 1); numbering runs start-index..count
+
+Output is printed AND copied to the clipboard.
+Set NOCOPY=1 to skip the clipboard.
+"""
+
+import sys
+import os
+import argparse
+import subprocess
+from datetime import datetime, timedelta
+from typing import List, Set, Optional, Tuple
+
+# Weekday mapping (abbreviation to Python's weekday, where Monday=0)
+DOW_MAP = {
+    'sun': 6,  # Sunday
+    'mon': 0,  # Monday
+    'tue': 1,  # Tuesday
+    'wed': 2,  # Wednesday
+    'thu': 3,  # Thursday
+    'fri': 4,  # Friday
+    'sat': 5,  # Saturday
+}
+
+
+def parse_args() -> Tuple[str, int, str, str, int]:
+    """Parse command line arguments."""
+    parser = argparse.ArgumentParser(
+        description='Generate numbered recurring markdown tasks on given weekdays',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog='''
+Examples:
+  %(prog)s "Task name" 10 mon,wed,fri
+  %(prog)s "Task name" 10 mon,wed,fri 2024-01-01
+  %(prog)s "Task name" 10 mon,wed,fri -i 5
+  %(prog)s "Task name" 10 mon,wed,fri 2024-01-01 -i 5
+        '''
+    )
+    
+    parser.add_argument('name', help='Task name')
+    parser.add_argument('count', type=int, help='Number of tasks to generate')
+    parser.add_argument('days', help='Comma-separated weekdays (sat,sun,mon,tue,wed,thu,fri)')
+    parser.add_argument('start_date', nargs='?', default='today', 
+                       help='Start date (default: today)')
+    parser.add_argument('-i', '--index', type=int, default=1,
+                       help='Start index for task numbering (default: 1)')
+    
+    args = parser.parse_args()
+    
+    # Validate count
+    if args.count < 1:
+        print(f"Error: count must be a positive integer.", file=sys.stderr)
+        sys.exit(1)
+    
+    # Validate start index
+    if args.index < 1:
+        print(f"Error: start index must be a positive integer.", file=sys.stderr)
+        sys.exit(1)
+    
+    if args.index > args.count:
+        print(f"Error: start index ({args.index}) must not exceed count ({args.count}).", 
+              file=sys.stderr)
+        sys.exit(1)
+    
+    return args.name, args.count, args.days, args.start_date, args.index
+
+
+def parse_days(days_arg: str) -> Set[int]:
+    """Parse and validate the days argument."""
+    wanted = set()
+    parts = days_arg.split(',')
+    
+    for part in parts:
+        # Normalize: lowercase, strip whitespace, take first 3 chars
+        day = part.strip().lower()[:3]
+        if not day:
+            continue
+        
+        if day not in DOW_MAP:
+            print(f"Error: unknown day '{part}' (use sun,mon,tue,wed,thu,fri,sat).", 
+                  file=sys.stderr)
+            sys.exit(1)
+        
+        wanted.add(DOW_MAP[day])
+    
+    if not wanted:
+        print("Error: no valid days given.", file=sys.stderr)
+        sys.exit(1)
+    
+    return wanted
+
+
+def parse_start_date(date_str: str) -> datetime:
+    """Parse the start date with multiple format support."""
+    if date_str.lower() == 'today':
+        return datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    
+    # Try common date formats
+    formats = [
+        '%Y-%m-%d',
+        '%Y/%m/%d',
+        '%m/%d/%Y',
+        '%d/%m/%Y',
+        '%m-%d-%Y',
+        '%d-%m-%Y',
+        '%b %d %Y',
+        '%B %d %Y',
+        '%d %b %Y',
+        '%d %B %Y',
+    ]
+    
+    for fmt in formats:
+        try:
+            return datetime.strptime(date_str, fmt)
+        except ValueError:
+            continue
+    
+    # Try to parse with dateutil if available
+    try:
+        from dateutil import parser as date_parser
+        return date_parser.parse(date_str)
+    except ImportError:
+        pass
+    except ValueError:
+        pass
+    
+    print(f"Error: invalid start date '{date_str}'.", file=sys.stderr)
+    sys.exit(1)
+
+
+def generate_tasks(name: str, count: int, wanted_days: Set[int], 
+                   start_date: datetime, start_index: int) -> List[str]:
+    """Generate the task list."""
+    tasks = []
+    current_date = start_date
+    task_num = start_index
+    
+    # Safety limit to prevent infinite loops
+    max_iterations = count * 14 + 100  # Worst case: checking many days per task
+    iterations = 0
+    
+    while task_num <= count:
+        if current_date.weekday() in wanted_days:
+            date_str = current_date.strftime('%Y-%m-%d')
+            tasks.append(f'- [ ] {name} {task_num} [due:: {date_str}]')
+            task_num += 1
+        
+        current_date += timedelta(days=1)
+        iterations += 1
+        
+        if iterations > max_iterations:
+            print("Error: safety limit reached while generating tasks.", file=sys.stderr)
+            sys.exit(1)
+    
+    return tasks
+
+
+def copy_to_clipboard(text: str) -> bool:
+    """Copy text to clipboard using available clipboard tools."""
+    # List of clipboard commands to try (in order of preference)
+    clipboard_commands = [
+        ['pbcopy'],                                    # macOS
+        ['wl-copy'],                                   # Wayland
+        ['xclip', '-selection', 'clipboard'],          # X11 (xclip)
+        ['xsel', '--clipboard', '--input'],            # X11 (xsel)
+        ['clip.exe'],                                  # Windows/WSL
+        ['termux-clipboard-set'],                      # Termux (Android)
+    ]
+    
+    for cmd in clipboard_commands:
+        try:
+            # Check if command exists
+            subprocess.run(['which', cmd[0]], 
+                         capture_output=True, check=True, timeout=1)
+            
+            # Try to copy
+            process = subprocess.Popen(cmd, stdin=subprocess.PIPE)
+            process.communicate(input=text.encode('utf-8'))
+            
+            if process.returncode == 0:
+                return True
+        except (subprocess.CalledProcessError, FileNotFoundError, 
+                subprocess.TimeoutExpired):
+            continue
+    
+    return False
+
+
+def main():
+    # Parse arguments
+    name, count, days_arg, start_date_str, start_index = parse_args()
+    
+    # Parse days
+    wanted_days = parse_days(days_arg)
+    
+    # Parse start date
+    start_date = parse_start_date(start_date_str)
+    
+    # Generate tasks
+    tasks = generate_tasks(name, count, wanted_days, start_date, start_index)
+    
+    # Join tasks into output string
+    output = '\n'.join(tasks) + ('\n' if tasks else '')
+    
+    # Print output
+    print(output, end='')
+    
+    # Copy to clipboard (unless NOCOPY is set)
+    if os.environ.get('NOCOPY', '0') == '1':
+        return
+    
+    if copy_to_clipboard(output):
+        actual_count = len(tasks)
+        print(f"(copied {actual_count} tasks to clipboard)", file=sys.stderr)
+    else:
+        print("Note: no clipboard tool found (pbcopy/wl-copy/xclip/xsel/clip.exe/termux-clipboard-set).", 
+              file=sys.stderr)
+
+
+if __name__ == '__main__':
+    main()

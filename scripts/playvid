@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+file=$(find . -type f \
+    -iregex '.*\.\(mp4\|mkv\|avi\|mov\|webm\|flv\|wmv\|m4v\|mpg\|mpeg\|ts\)$' \
+    | sed 's|^\./||' \
+    | fzf --prompt='video> ' --height=60% --reverse --border)
+
+[ -n "$file" ] && mpv -- "$file"
