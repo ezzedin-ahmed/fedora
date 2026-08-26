@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# k3s-down — stop k3s and clean up leftover containers after a testing session.
+# Does NOT disable k3s at boot; that setting is managed separately for on-demand usage.
+set -euo pipefail
+
+echo "Stopping k3s..."
+sudo systemctl stop k3s || true
+
+# systemctl stop leaves containerd-shims and pod containers orphaned;
+# k3s-killall.sh tears down the shims, network interfaces, and mounts.
+echo "Cleaning up shims, mounts, and network interfaces..."
+sudo /usr/local/bin/k3s-killall.sh
+
+echo "Verifying cleanup..."
+# Only k3s shims live in the "k8s.io" containerd namespace. Docker's shims use
+# the "moby" namespace and must be left alone, so we match k8s.io specifically.
+# The `[k]8s.io` trick keeps pgrep from matching its own command line.
+if pgrep -af 'containerd-shim.*namespace [k]8s.io' >/dev/null; then
+  echo "Warning: some k3s containerd-shim processes are still running:" >&2
+  pgrep -af 'containerd-shim.*namespace [k]8s.io' >&2
+  exit 1
+fi
+
+echo "k3s is down and cleaned up."
