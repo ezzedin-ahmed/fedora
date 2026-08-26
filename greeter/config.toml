@@ -1,0 +1,12 @@
+[terminal]
+vt = 1
+
+# Autologin straight into sway on boot.
+[initial_session]
+command = "sway"
+user = "ezzedin"
+
+# Shown on logout / when autologin is not used.
+[default_session]
+command = "tuigreet --time --remember --cmd sway"
+user = "greetd"
