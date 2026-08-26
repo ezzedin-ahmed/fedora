@@ -1,0 +1,194 @@
+/* Gruvbox dark, macOS-style menu bar — flat, monochrome, no per-module boxes.
+   Palette matches alacritty/colors.toml. */
+
+@define-color bg0    #282828;
+@define-color bg1    #3c3836;
+@define-color bg2    #504945;
+
+@define-color fg0    #fbf1c7;
+@define-color fg1    #ebdbb2;
+@define-color fg3    #bdae93;
+@define-color fg4    #a89984;
+@define-color gray   #928374;
+
+@define-color red    #fb4934;
+@define-color yellow #fabd2f;
+@define-color blue   #83a598;
+@define-color aqua   #8ec07c;
+
+* {
+  border: none;
+  border-radius: 0;
+  min-height: 0;
+  font-family: "Hack Nerd Font", "HackNerdFont", "Noto Sans", sans-serif;
+  font-size: 14px;
+}
+
+window#waybar {
+  background-color: transparent;
+  color: @fg1;
+  /* Nothing sits behind the bar now, so lean on a text shadow to keep the
+     labels legible over a light patch of wallpaper. */
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85);
+}
+
+window#waybar.hidden {
+  opacity: 0.2;
+}
+
+tooltip {
+  background-color: @bg0;
+  border: 1px solid @bg2;
+  border-radius: 8px;
+}
+
+tooltip label {
+  color: @fg1;
+  padding: 4px;
+}
+
+/* Workspaces — flat, no boxes; the active one just brightens. */
+
+#workspaces {
+  margin-left: 4px;
+}
+
+#workspaces button {
+  padding: 0 9px;
+  min-width: 0;
+  background: none;
+  color: @fg3;
+}
+
+#workspaces button:hover {
+  background: none;
+  color: @fg1;
+  box-shadow: none;
+  text-shadow: none;
+}
+
+#workspaces button.focused,
+#workspaces button.active {
+  color: @fg0;
+  font-weight: bold;
+}
+
+#workspaces button.urgent {
+  color: @red;
+}
+
+#mode {
+  color: @yellow;
+  padding: 0 8px;
+}
+
+/* Every status module: transparent, evenly spaced, one colour. */
+
+#custom-stats,
+#custom-power,
+#custom-lock,
+#custom-logout,
+#custom-suspend,
+#custom-reboot,
+#custom-shutdown,
+#cpu,
+#memory,
+#pulseaudio,
+#backlight,
+#idle_inhibitor,
+#language,
+#network,
+#bluetooth,
+#battery,
+#tray,
+#clock {
+  background: none;
+  padding: 0 8px;
+  color: @fg1;
+}
+
+/* Clock sits at the far right, plain text, no surrounding box. */
+
+#clock {
+  color: @fg0;
+  padding-right: 14px;
+  padding-left: 10px;
+}
+
+#custom-stats {
+  color: @fg1;
+}
+
+#custom-stats:hover,
+#idle_inhibitor:hover,
+#network:hover,
+#bluetooth:hover,
+#language:hover,
+#pulseaudio:hover,
+#backlight:hover {
+  color: @fg0;
+}
+
+/* Drawer contents revealed on click. */
+
+.drawer-child {
+  color: @fg1;
+}
+
+#idle_inhibitor.activated {
+  color: @yellow;
+}
+
+#language {
+  color: @aqua;
+}
+
+#network.disconnected,
+#bluetooth.disabled,
+#bluetooth.off,
+#pulseaudio.muted {
+  color: @gray;
+}
+
+/* States get colour, not a filled box. */
+
+#battery.warning:not(.charging) {
+  color: @yellow;
+}
+
+#battery.critical:not(.charging) {
+  color: @red;
+}
+
+#battery.charging,
+#battery.plugged {
+  color: @aqua;
+}
+
+#tray {
+  padding-right: 4px;
+}
+
+#custom-power {
+  padding-right: 14px;
+}
+
+#custom-shutdown:hover,
+#custom-reboot:hover,
+#custom-power:hover {
+  color: @red;
+}
+
+#custom-lock:hover,
+#custom-logout:hover,
+#custom-suspend:hover {
+  color: @fg0;
+}
+
+#tray > .passive {
+  -gtk-icon-effect: dim;
+}
+
+#tray > .needs-attention {
+  -gtk-icon-effect: highlight;
+}

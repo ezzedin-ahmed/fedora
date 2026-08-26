@@ -1,0 +1,254 @@
+# ============================================================
+# Sway configuration
+# ============================================================
+
+### Variables
+
+set $mod Mod4
+
+set $terminal alacritty
+set $launcher fuzzel
+set $filemanager thunar
+
+set $menu $launcher
+
+### Environment
+
+# The distro default config ends with this include; a hand-written config that
+# drops it loses the sway-systemd integration in /etc/sway/config.d, which runs
+# session.sh to start sway-session.target (bound to graphical-session.target),
+# export XDG_CURRENT_DESKTOP=sway / XDG_SESSION_TYPE=wayland, and propagate
+# WAYLAND_DISPLAY/SWAYSOCK to systemd and dbus. Without it graphical-session
+# .target never activates, and xdg-desktop-portal — which has Requisite= on it —
+# can never start, taking dark-mode appearance, screen sharing and native file
+# pickers down with it.
+include /etc/sway/config.d/*
+
+### Startup
+
+exec_always waybar
+exec_always mako
+exec_always /usr/libexec/polkit-gnome-authentication-agent-1
+
+### Default terminal
+
+bindsym $mod+Return exec $terminal
+
+### Application launcher
+
+bindsym $mod+d exec $menu
+
+### File manager
+
+bindsym $mod+Shift+f exec $filemanager
+
+### Kill focused window
+
+bindsym $mod+Shift+q kill
+
+### Reload configuration
+
+bindsym $mod+Shift+c reload
+
+### Restart Sway
+
+bindsym $mod+Shift+r restart
+
+### Exit Sway
+
+bindsym $mod+Shift+e exec swaynag -t warning -m 'Exit Sway?' -B 'Exit' 'swaymsg exit'
+
+### Focus movement
+
+bindsym $mod+h focus left
+bindsym $mod+j focus down
+bindsym $mod+k focus up
+bindsym $mod+l focus right
+
+### Alternative arrow navigation
+
+bindsym $mod+Left focus left
+bindsym $mod+Down focus down
+bindsym $mod+Up focus up
+bindsym $mod+Right focus right
+
+### Move windows
+
+bindsym $mod+Shift+h move left
+bindsym $mod+Shift+j move down
+bindsym $mod+Shift+k move up
+bindsym $mod+Shift+l move right
+
+### Split
+
+bindsym $mod+b splith
+bindsym $mod+v splitv
+
+### Fullscreen
+
+bindsym $mod+f fullscreen toggle
+
+### Floating
+
+bindsym $mod+Shift+space floating toggle
+
+### Focus mode
+
+bindsym $mod+space focus mode_toggle
+
+### Workspaces
+
+set $ws1 "1"
+set $ws2 "2"
+set $ws3 "3"
+set $ws4 "4"
+set $ws5 "5"
+set $ws6 "6"
+set $ws7 "7"
+set $ws8 "8"
+set $ws9 "9"
+set $ws10 "10"
+
+bindsym $mod+1 workspace number $ws1
+bindsym $mod+2 workspace number $ws2
+bindsym $mod+3 workspace number $ws3
+bindsym $mod+4 workspace number $ws4
+bindsym $mod+5 workspace number $ws5
+bindsym $mod+6 workspace number $ws6
+bindsym $mod+7 workspace number $ws7
+bindsym $mod+8 workspace number $ws8
+bindsym $mod+9 workspace number $ws9
+bindsym $mod+0 workspace number $ws10
+
+### Move containers to workspaces
+
+bindsym $mod+Shift+1 move container to workspace number $ws1
+bindsym $mod+Shift+2 move container to workspace number $ws2
+bindsym $mod+Shift+3 move container to workspace number $ws3
+bindsym $mod+Shift+4 move container to workspace number $ws4
+bindsym $mod+Shift+5 move container to workspace number $ws5
+bindsym $mod+Shift+6 move container to workspace number $ws6
+bindsym $mod+Shift+7 move container to workspace number $ws7
+bindsym $mod+Shift+8 move container to workspace number $ws8
+bindsym $mod+Shift+9 move container to workspace number $ws9
+bindsym $mod+Shift+0 move container to workspace number $ws10
+
+### Scratchpad
+
+bindsym $mod+Shift+minus move scratchpad
+bindsym $mod+minus scratchpad show
+
+### Layout
+
+bindsym $mod+s layout stacking
+bindsym $mod+w layout tabbed
+bindsym $mod+e layout toggle split
+
+### Resize mode
+
+mode "resize" {
+    bindsym h resize shrink width 10 px
+    bindsym j resize grow height 10 px
+    bindsym k resize shrink height 10 px
+    bindsym l resize grow width 10 px
+
+    bindsym Left resize shrink width 10 px
+    bindsym Down resize grow height 10 px
+    bindsym Up resize shrink height 10 px
+    bindsym Right resize grow width 10 px
+
+    bindsym Return mode "default"
+    bindsym Escape mode "default"
+}
+
+bindsym $mod+r mode "resize"
+
+### Screenshots
+
+bindsym Print exec ~/fedora-machine/dotfiles/sway/scripts/screenshot.sh
+
+### Audio
+
+bindsym XF86AudioRaiseVolume exec pactl set-sink-volume @DEFAULT_SINK@ +5%
+bindsym XF86AudioLowerVolume exec pactl set-sink-volume @DEFAULT_SINK@ -5%
+bindsym XF86AudioMute exec pactl set-sink-mute @DEFAULT_SINK@ toggle
+bindsym XF86AudioMicMute exec pactl set-source-mute @DEFAULT_SOURCE@ toggle
+
+### Media
+
+bindsym XF86AudioPlay exec playerctl play-pause
+bindsym XF86AudioNext exec playerctl next
+bindsym XF86AudioPrev exec playerctl previous
+
+### Brightness
+
+bindsym XF86MonBrightnessUp exec brightnessctl set +10%
+bindsym XF86MonBrightnessDown exec brightnessctl set 10%-
+
+### Lock
+
+# bindsym $mod+l exec swaylock -f -c 000000
+
+### Idle
+
+exec swayidle \
+    -w \
+    timeout 300 'swaylock -f -c 000000' \
+    timeout 600 'swaymsg "output * power off"' \
+    resume 'swaymsg "output * power on"' \
+    before-sleep 'swaylock -f -c 000000'
+
+### Keyboard
+
+# Plain `ara` keeps Latin digits on the number row; the Arabic-Indic ones sit on
+# level 3 (AltGr). The `ara(digits)` variants are the opposite — they put Eastern
+# Arabic numerals on the unshifted row — so no variant is set here on purpose.
+input type:keyboard {
+    xkb_layout "us,ara"
+    xkb_options "grp:alt_shift_toggle,caps:swapescape"
+}
+
+### Mouse/touchpad
+
+input type:touchpad {
+    tap enabled
+    natural_scroll disabled
+}
+
+### Appearance
+
+default_border none
+default_floating_border none
+
+# Wallpaper lives in the repo so it survives ~/Downloads being cleared.
+output * bg /home/ezzedin/fedora-machine/wm/wallpapers/background.jpg fill
+
+### Gaps
+
+gaps inner 0
+gaps outer 0
+
+### Wayland
+
+seat seat0 xcursor_theme Adwaita 24
+
+### Colors
+
+# Only tab/stack labels use these now that borders are off. Gruvbox, no blue.
+#                       border  background text    indicator child_border
+client.focused          #504945 #3c3836    #ebdbb2 #504945   #3c3836
+client.focused_inactive #3c3836 #282828    #a89984 #3c3836   #282828
+client.unfocused        #3c3836 #282828    #928374 #3c3836   #282828
+client.urgent           #cc241d #cc241d    #fbf1c7 #cc241d   #cc241d
+
+### Floating applications
+
+for_window [app_id="pavucontrol"] floating enable
+for_window [app_id="blueman-manager"] floating enable
+
+# Wifi picker launched from waybar's network icon.
+for_window [app_id="nmtui"] floating enable, resize set 760 520
+
+### Include local configuration if present
+
+# include ~/.config/sway/config.local
