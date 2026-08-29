@@ -19,6 +19,7 @@ Each top-level directory is an independent, idempotent module with its own `inst
 | `wm/` | sway, waybar, mako, pipewire, mesa/vulkan, bluetooth, media | `~/.config/{sway,waybar,mako,fuzzel}` |
 | `alacritty/` | — | `~/.config/alacritty` |
 | `fish/` | `chsh -s fish` | `~/.config/fish` |
+| `tmux/` | tmux | `~/.config/tmux` |
 | `nvim/` | neovim, rustup, uv, build toolchain | `~/.config/nvim` |
 | `fonts/` | — | `~/.local/share/fonts` |
 | `scripts/` | — | `~/scripts` |
@@ -59,7 +60,9 @@ in this repo is immediately live — there is no copy/apply step. Two consequenc
 
 Standard LazyVim starter (`init.lua` → `lua/config/lazy.lua`). Language extras are declared in
 `lazyvim.json`, not in Lua. Local customizations live in `lua/plugins/` (gruvbox colorscheme, oil.nvim
-as file explorer with `-` as the keymap, bufferline and snacks-explorer disabled in `disabled.lua`).
+as file explorer with `-` as the keymap, bufferline and snacks-explorer disabled in `disabled.lua`,
+vim-tmux-navigator in `tmux-navigator.lua` — its `keys` spec is what takes `<C-h>`/`<C-l>` over from
+LazyVim, and its tmux counterpart is the `is_vim` block in `tmux/tmux.conf`).
 
 `lua/config/remote_clipboard.lua` is the one non-trivial piece: when running under tmux, SSH, or
 herdr it installs a custom `vim.g.clipboard` that always emits OSC 52 on yank (so copies reach the
