@@ -43,9 +43,13 @@ sudo dnf install -y \
   nmap \
   socat \
   syncthing \
+  gvfs-mtp \
+  jmtpfs \
+  libmtp \
   android-tools \
   NetworkManager \
-  iwlwifi-mvm-firmware
+  iwlwifi-mvm-firmware \
+  vnstat
 
 if ! rpm -q rpmfusion-free-release >/dev/null 2>&1; then
   sudo dnf install "https://mirrors.rpmfusion.org/free/fedora/rpmfusion-free-release-${FEDORA_VERSION}.noarch.rpm"
@@ -60,4 +64,5 @@ sudo dnf upgrade --refresh -y
 # Syncthing runs as a user service. Lingering keeps it alive from boot rather
 # than only while a login session exists.
 systemctl --user enable --now syncthing.service
+sudo systemctl enable --now vnstat
 sudo loginctl enable-linger "$USER"
