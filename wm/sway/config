@@ -183,7 +183,7 @@ bindsym XF86AudioPrev exec playerctl previous
 ### Brightness
 
 bindsym XF86MonBrightnessUp exec brightnessctl set +10%
-bindsym XF86MonBrightnessDown exec brightnessctl set 10%-
+bindsym XF86MonBrightnessDown exec brightnessctl set 5%-
 
 ### Lock
 
@@ -206,6 +206,9 @@ exec swayidle \
 input type:keyboard {
     xkb_layout "us,ara"
     xkb_options "grp:alt_shift_toggle,caps:swapescape"
+    # Defaults are 600ms/25Hz; snappier hold-to-repeat.
+    repeat_delay 200
+    repeat_rate 40
 }
 
 ### Mouse/touchpad
