@@ -2,4 +2,4 @@
 
 set -Eeou pipefail
 
-ln -vfs $HOME/fedora-machine/alacritty/ $HOME/.config/alacritty
+ln -vfs $HOME/fedora/alacritty/ $HOME/.config/alacritty

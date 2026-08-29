@@ -35,7 +35,7 @@ in this repo is immediately live — there is no copy/apply step. Two consequenc
 
 - Never replace a symlinked target with a real directory; that breaks the whole model.
 - `ln -s` into a path that already exists as a directory nests instead of replacing. That is how
-  `nvim/nvim -> /home/ezzedin/fedora-machine/nvim` (a stray self-symlink) got created. If a rerun
+  `nvim/nvim -> /home/ezzedin/fedora/nvim` (a stray self-symlink) got created. If a rerun
   produces `<module>/<module>`, delete it; it means the target was a real directory at the time.
 
 `fish/config.fish` puts `~/scripts` on `PATH`, so everything in `scripts/` is a global command.
@@ -83,7 +83,7 @@ Verify before assuming these are intentional:
 
 - `desktop-apps/{brave,obs-studio,telegram,vlc}.sh` say `set -Eeou pipfail` (typo). Bash rejects the
   option and, because `-e` never takes effect, those scripts run **unguarded**. Fix to `pipefail`.
-- `wm/sway/config` binds `Print` to `~/fedora-machine/dotfiles/sway/scripts/screenshot.sh`, a path
+- `wm/sway/config` binds `Print` to `~/fedora/dotfiles/sway/scripts/screenshot.sh`, a path
   that does not exist. The real script is `~/scripts/screenshot`.
 - `wm/install.sh` installs `wofi` but the config and sway's `$launcher` both use `fuzzel`, which is
   never installed.

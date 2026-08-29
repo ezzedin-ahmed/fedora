@@ -4,4 +4,4 @@ set -Eeuo pipefail
 
 chsh -s $(which fish)
 
-ln -vfs $HOME/fedora-machine/fish/ $HOME/.config/fish
+ln -vfs $HOME/fedora/fish/ $HOME/.config/fish

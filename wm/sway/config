@@ -165,7 +165,7 @@ bindsym $mod+r mode "resize"
 
 ### Screenshots
 
-bindsym Print exec ~/fedora-machine/dotfiles/sway/scripts/screenshot.sh
+bindsym Print exec ~/fedora/dotfiles/sway/scripts/screenshot
 
 ### Audio
 
@@ -221,7 +221,7 @@ default_border none
 default_floating_border none
 
 # Wallpaper lives in the repo so it survives ~/Downloads being cleared.
-output * bg /home/ezzedin/fedora-machine/wm/wallpapers/background.jpg fill
+output * bg /home/ezzedin/fedora/wm/wallpapers/background.jpg fill
 
 ### Gaps
 

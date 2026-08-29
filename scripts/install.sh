@@ -2,4 +2,4 @@
 
 set -Eeou pipefail
 
-ln -vfs $HOME/fedora-machine/scripts/ $HOME/scripts
+ln -vfs $HOME/fedora/scripts/ $HOME/scripts

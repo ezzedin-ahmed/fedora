@@ -62,10 +62,10 @@ systemctl --user enable --now wireplumber.service
 
 # sudo systemctl enable --now bluetooth
 
-ln -vfs $HOME/fedora-machine/wm/sway $HOME/.config/sway
-ln -vfs $HOME/fedora-machine/wm/waybar $HOME/.config/waybar
-ln -vfs $HOME/fedora-machine/wm/mako $HOME/.config/mako
-ln -vfs $HOME/fedora-machine/wm/fuzzel/ $HOME/.config/fuzzel
+ln -vfs $HOME/fedora/wm/sway $HOME/.config/sway
+ln -vfs $HOME/fedora/wm/waybar $HOME/.config/waybar
+ln -vfs $HOME/fedora/wm/mako $HOME/.config/mako
+ln -vfs $HOME/fedora/wm/fuzzel/ $HOME/.config/fuzzel
 
 # GTK ships these as real (often empty) directories; ln -s into an existing
 # directory would nest instead of replacing, so clear them out first.
@@ -75,7 +75,7 @@ for d in gtk-3.0 gtk-4.0; do
       echo "warning: $HOME/.config/$d is not empty; not replacing it" >&2
   fi
   [ -e "$HOME/.config/$d" ] && [ ! -L "$HOME/.config/$d" ] ||
-    ln -vfs "$HOME/fedora-machine/wm/$d" "$HOME/.config/$d"
+    ln -vfs "$HOME/fedora/wm/$d" "$HOME/.config/$d"
 done
 
 # settings.ini only covers GTK3/GTK4. libadwaita, the xdg-desktop-portal
