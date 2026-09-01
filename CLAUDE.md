@@ -54,7 +54,7 @@ package, and under `set -e` a failed install would otherwise skip every link.
 - `tmux-sessionizer` — fzf over git repos 1–2 levels under `$PROJECTS_ROOT` (default `~/Projects`);
   creates a session with window 1 running `nvim .` plus 3 shell windows, or attaches if it exists.
 - `pstats` — scans a tree for repos with uncommitted/unpushed work; exits 1 if anything needs
-  attention. Root overridable via `GITCHECK_ROOT`.
+  attention. Root overridable via `PSTATS_ROOT` (legacy `GITCHECK_ROOT` still honoured).
 - `k3s-up` / `k3s-down` — on-demand k3s lifecycle. k3s is deliberately **not** enabled at boot;
   `k3s-down` runs `k3s-killall.sh` and verifies only `k8s.io`-namespace shims are gone (Docker's
   `moby` shims must survive).
@@ -98,19 +98,11 @@ routing errors into the quickfix list via the tex `errorformat`.
 
 ## Known inconsistencies
 
-Verify before assuming these are intentional:
-
-- `desktop-apps/{brave,obs-studio,telegram,vlc}.sh` say `set -Eeou pipfail` (typo). Bash rejects the
-  option and, because `-e` never takes effect, those scripts run **unguarded**. Fix to `pipefail`.
-- `wm/sway/config` binds `Print` to `~/fedora/dotfiles/sway/scripts/screenshot.sh`, a path
-  that does not exist. The real script is `~/scripts/screenshot`.
-- `wm/install.sh` installs `wofi` but the config and sway's `$launcher` both use `fuzzel`, which is
-  never installed.
-- Sway's `$filemanager` is `thunar`, also not installed by any module.
-- `wm/waybar/config` uses `hyprland/workspaces` and `hyprland/window` modules, but the compositor
-  here is sway — those modules will not populate. Sway equivalents are `sway/workspaces` and
-  `sway/window`.
-- `scripts/pstats` documents itself as `gitcheck` in its header and usage text.
+None outstanding. The previously listed ones are resolved: the `Print` binding now points at
+`screenshot` on `PATH` (it pointed into a long-gone `~/fedora/dotfiles/` tree), `$filemanager` is
+`nautilus` and installed by `wm/`, `pstats` no longer calls itself `gitcheck`, and `wofi` /
+`hyprland/*` waybar modules are long gone — `wm/install.sh` installs `fuzzel` and the bar uses
+`sway/workspaces`.
 
 ## Hybrid graphics
 

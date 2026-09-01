@@ -1,16 +1,18 @@
 #!/usr/bin/env bash
 #
-# gitcheck — a bird's-eye view of uncommitted and unpushed work across many repos.
+# pstats — a bird's-eye view of uncommitted and unpushed work across many repos.
 #
-#   gitcheck                 scan ~/Projects
-#   gitcheck ~/work -f       scan ~/work, fetching remotes first
-#   gitcheck -q              only list repos that need attention
+#   pstats                   scan ~/Projects
+#   pstats ~/work -f         scan ~/work, fetching remotes first
+#   pstats -q                only list repos that need attention
 #
 # Exit status: 0 if everything is clean and pushed, 1 if something needs attention.
 
 set -uo pipefail
 
-ROOT="${GITCHECK_ROOT:-$HOME/Projects}"
+# PSTATS_ROOT is the current name; GITCHECK_ROOT is the old one, still
+# honoured so existing environments keep working.
+ROOT="${PSTATS_ROOT:-${GITCHECK_ROOT:-$HOME/Projects}}"
 MAXDEPTH=4
 DO_FETCH=0
 DIRTY_ONLY=0
@@ -19,7 +21,7 @@ COLOR_MODE=auto
 
 usage() {
     cat <<'EOF'
-Usage: gitcheck [options] [directory]
+Usage: pstats [options] [directory]
 
 Scans a directory tree for git repositories and reports, for each one,
 anything that is not safely committed and pushed.
@@ -34,11 +36,12 @@ Options:
 
 Notes:
   Nested repos (submodules, vendored checkouts) are skipped.
-  The default root can be changed with the GITCHECK_ROOT environment variable.
+  The default root can be changed with the PSTATS_ROOT environment variable
+  (GITCHECK_ROOT is still accepted).
 EOF
 }
 
-die() { printf 'gitcheck: %s\n' "$*" >&2; exit 2; }
+die() { printf 'pstats: %s\n' "$*" >&2; exit 2; }
 
 # ---------------------------------------------------------------- arguments --
 while [[ $# -gt 0 ]]; do
