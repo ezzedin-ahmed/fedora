@@ -51,7 +51,7 @@ package, and under `set -e` a failed install would otherwise skip every link.
 
 `scripts/` holds standalone executables (no extensions, shebang-dispatched — bash and python3):
 
-- `tmux-sessionizer` — fzf over git repos 1–2 levels under `$PROJECTS_ROOT` (default `~/Projects`);
+- `tmux-sessionizer` — fzf over git repos 1–2 levels under `$PROJECTS_ROOT` (default `~/projects`);
   creates a session with window 1 running `nvim .` plus 3 shell windows, or attaches if it exists.
 - `pstats` — scans a tree for repos with uncommitted/unpushed work; exits 1 if anything needs
   attention. Root overridable via `PSTATS_ROOT` (legacy `GITCHECK_ROOT` still honoured).

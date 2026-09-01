@@ -2,9 +2,10 @@
 #
 # Run one command on the discrete NVIDIA GPU (PRIME render offload).
 #
-# Sway is pinned to the Intel iGPU via WLR_DRM_DEVICES in the greetd session
-# command, so nothing touches the Quadro unless it is asked to. This is the
-# asking:
+# Sway is pinned to the Intel iGPU by absence: the NVIDIA modules are
+# blacklisted at boot (/etc/modprobe.d/nvidia-ondemand.conf, from
+# wm/install.sh), so no nvidia DRM node exists for wlroots to pick and nothing
+# touches the Quadro unless it is asked to. This is the asking:
 #
 #   prime-run glxinfo -B          # should print the Quadro, not HD Graphics
 #   prime-run vkcube
