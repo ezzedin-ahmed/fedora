@@ -23,6 +23,7 @@ Each top-level directory is an independent, idempotent module with its own `inst
 | `nvim/` | neovim, rustup, uv, build toolchain | `~/.config/nvim` |
 | `fonts/` | — | `~/.local/share/fonts` |
 | `scripts/` | — | `~/scripts` |
+| `greeter/` | greetd, gtkgreet, sway (tuigreet kept as fallback); **writes `/etc/greetd/{config.toml,sway-config,gtkgreet.css,background.jpg,environments}`** (root, not symlinks) | — |
 | `desktop-apps/` | one script per app; **no `install.sh`**, run individually | — |
 
 There is no top-level bootstrap script. Modules are run by hand and roughly in the order above
@@ -106,12 +107,54 @@ Verify before assuming these are intentional:
   `sway/window`.
 - `scripts/pstats` documents itself as `gitcheck` in its header and usage text.
 
-## Lock screen
+Nothing in `greeter/` is live. All four files — `config.toml`, `sway-config`, `gtkgreet.css` and the
+wallpaper — are *copied* into `/etc/greetd/`, so a change needs `greeter/install.sh` rerun. They
+cannot be symlinked the way every other module does it: the greeter runs as the `greetd` user and
+`/home/ezzedin` is `0700`, so nothing in this repo is readable to it. That permission bit is the
+whole reason for the copy, and it is why the wallpaper is duplicated rather than shared with
+`wm/sway/config`.
 
-`gtklock` (`wm/gtklock/`) is the locker, driven by `set $lock` in `wm/sway/config`, which is the one
-place the command is written. swayidle's `before-sleep` hook is the important one: there is no
-`bindswitch` for the lid, so lid-close falls through to logind's `HandleLidSwitch=suspend` and
-that hook is all that stands between reopening the lid and a live session.
+The script then restarts `greetd` itself — but only when sway is not running, since a restart takes
+greetd's VT and every session under it down with it. From inside a session it skips the restart and
+the change lands at the next logout. Run from a TTY it applies immediately, which is also how you
+recover from a config that bounces you off the greeter. The check is
+`pgrep -x -u "$(id -u)" sway`, and the `-u` is load-bearing: the greeter is *itself* a sway now, so a
+bare `pgrep -x sway` would always match and the recovery restart would never fire.
+
+## Lock screen and login
+
+Two separate things, easily conflated:
+
+- **Login** — `greeter/` installs greetd + **gtkgreet**, which is the program gtklock was forked
+  from (Fedora's own package summary for gtklock is "Lock screen based on gtkgreet"). That is the
+  point: login and unlock are the same screen, and `greeter/gtkgreet.css` deliberately mirrors
+  `wm/gtklock/style.css` — same gruvbox palette, same dimmed wallpaper, same card.
+
+  gtkgreet is a Wayland client, not a standalone program, so it needs a compositor to live in.
+  `config.toml` therefore starts **sway** with a greeter-only config (`greeter/sway-config`) whose
+  last line is `exec 'gtkgreet …; swaymsg exit'`. The `swaymsg exit` is load-bearing: greetd starts
+  the *compositor*, so sway must terminate once gtkgreet finalises a login or the greeter session
+  never ends and the user session never begins. That greeter config deliberately omits the
+  `include /etc/sway/config.d/*` the real one needs — the greeter is not a user session and must not
+  start `graphical-session.target` or the portals as the `greetd` user.
+
+  Two things gtkgreet writes in Pango markup, and markup beats CSS, so they are **not** styleable:
+  the clock's size (`<span size='32000'>`, 32pt on the focused output) and the failed-login text
+  colour (`<span color="red">`). Everything else about them — family, weight, colour of the clock —
+  still takes CSS. Widget names for selectors are `#window`, `#clock`, `#body` (the card),
+  `#input-field` and `#command-selector`; they are *not* the same names gtklock uses.
+
+  `tuigreet` is still installed on purpose although nothing references it. It is the recovery
+  greeter — no compositor, no GPU, no stylesheet — so pointing `command` back at
+  `tuigreet --time --remember --cmd sway` from a TTY is a guaranteed way back in.
+
+  There is deliberately **no `[initial_session]`** in `greeter/config.toml`: that is greetd's
+  autologin, and it starts a session with no authentication at all, so the first login after a
+  shutdown skipped the password entirely.
+- **Lock** — `gtklock` (`wm/gtklock/`), driven by `set $lock` in `wm/sway/config`, which is the one
+  place the command is written. swayidle's `before-sleep` hook is the important one: there is no
+  `bindswitch` for the lid, so lid-close falls through to logind's `HandleLidSwitch=suspend` and
+  that hook is all that stands between reopening the lid and a live session.
 
 Upstream `swaylock` was replaced because it draws only a ring — no field to type into, no clock —
 and `swaylock-effects` is not packaged for Fedora. gtklock is an `ext-session-lock` client, so the

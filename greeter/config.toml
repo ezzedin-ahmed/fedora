@@ -1,12 +1,32 @@
 [terminal]
 vt = 1
 
-# Autologin straight into sway on boot.
-[initial_session]
-command = "sway"
-user = "ezzedin"
-
-# Shown on logout / when autologin is not used.
+# No [initial_session]. That block is greetd's autologin: it runs once per boot
+# with no authentication, so the first login after a shutdown got straight into
+# sway without a password prompt. Every login now goes through the greeter.
+#
+# Pinning sway to the Intel iGPU is handled by
+# /etc/modprobe.d/nvidia-ondemand.conf (wm/install.sh), which keeps the NVIDIA
+# modules unloaded at boot. With no nvidia DRM node present, /dev/dri holds
+# only the Intel card and wlroots cannot pick the wrong GPU -- a stronger
+# guarantee than an environment variable, and one that cannot break login. It
+# covers the greeter's compositor as well as the session's, since both are
+# wlroots and both start after the blacklist has taken effect.
 [default_session]
-command = "tuigreet --time --remember --cmd sway"
+# The greeter is gtkgreet -- a GTK client, the program gtklock was forked from,
+# so the login screen and the lock screen are the same thing to look at. It is
+# not standalone: it needs a compositor, which is why this launches sway with a
+# greeter-only config that execs gtkgreet and exits on login. See
+# greeter/sway-config.
+#
+# Unlike tuigreet's --cmd, this string is safe to write as several words:
+# greetd runs `command` through sh(1) (greetd(5)), so ordinary shell syntax
+# works here. The old warning was about tuigreet specifically, which did not
+# word-split its own --cmd value before handing it to greetd, so
+#     --cmd 'env WLR_DRM_DEVICES=... sway'
+# made greetd exec a binary literally named "env WLR_DRM_DEVICES=... sway" and
+# ENOENT it: PAM authenticated, the session opened and closed in the same
+# second, and the greeter just reappeared. That trap is gone now, but it is
+# worth knowing about before reverting to tuigreet.
+command = "sway --config /etc/greetd/sway-config"
 user = "greetd"

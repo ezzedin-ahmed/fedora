@@ -1,0 +1,202 @@
+/* gtkgreet — gruvbox dark, deliberately the same palette and card shape as
+   wm/gtklock/style.css so the login screen and the lock screen read as one
+   thing. gtklock is literally a fork of gtkgreet ("Lock screen based on
+   gtkgreet" is the Fedora package summary), so the widget trees are close,
+   but the names differ — do not assume a selector that works in one works in
+   the other.
+
+   GTK3 CSS (gtkgreet links libgtk-3). @define-color works; CSS custom
+   properties do not. Widget names come from gtk_widget_set_name(), so they
+   are addressed as #name. gtkgreet's are, outermost first:
+
+       window            the layer-shell surface, one per output
+       #window           vertical box: clock on top, card below
+       #clock            the HH:MM label
+       #body             the card — the "clear place to type"
+       #input-field      the GtkEntry (username, then password)
+       #command-selector the session combo, shown on the first prompt only
+
+   NOT settable here, both because gtkgreet writes Pango markup over the
+   label and markup beats CSS:
+
+     - #clock font-size. window_update_clock() emits <span size='32000'>
+       (32pt on the focused output, 96pt on the others), so a font-size
+       declaration is silently ignored. Everything else about the clock —
+       colour, family, weight, letter-spacing, shadow — still applies.
+     - the failed-login text colour. It is wrapped in <span color="red">.
+
+   This file is COPIED to /etc/greetd/gtkgreet.css by greeter/install.sh; it
+   is not symlinked and not live-on-edit. It cannot be: the greeter runs as
+   the greetd user and /home/ezzedin is 0700, so nothing under this repo is
+   readable to it. Same reason the wallpaper is copied to /etc/greetd. */
+
+@define-color bg0    #282828;
+@define-color bg1    #3c3836;
+@define-color bg2    #504945;
+
+@define-color fg0    #fbf1c7;
+@define-color fg1    #ebdbb2;
+@define-color fg3    #bdae93;
+@define-color fg4    #a89984;
+
+@define-color red    #fb4934;
+@define-color yellow #fabd2f;
+@define-color blue   #83a598;
+
+/* The wallpaper, dimmed — the flat translucent wash from gtklock, for the
+   same reason: it keeps the clock and the entry legible over a light patch
+   without a separate blurred asset.
+
+   The greeter's sway config also sets `output * bg` to the same image. That
+   is not redundant: this window only exists once gtkgreet has started, and
+   the sway background is what fills the gap before then instead of a black
+   flash. Upstream's stock CSS makes this window transparent and leans on the
+   compositor for the whole background; painting it here instead is what lets
+   the dim wash match gtklock exactly. */
+window, window.background {
+  background-color: @bg0;
+  background-image:
+    linear-gradient(rgba(40, 40, 40, 0.72), rgba(40, 40, 40, 0.72)),
+    url("/etc/greetd/background.jpg");
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  font-family: "Hack Nerd Font", "HackNerdFont", "Noto Sans", sans-serif;
+  color: @fg1;
+}
+
+/* Clock. Size comes from Pango markup, see the header. */
+#clock {
+  color: @fg0;
+  font-weight: 300;
+  letter-spacing: 2px;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
+  margin-bottom: 18px;
+}
+
+/* The card. gtkgreet gives #body a 384px width request in code, so CSS can
+   pad it but cannot make it narrower than that. */
+#body {
+  background-color: rgba(60, 56, 54, 0.92);
+  border: 1px solid @bg2;
+  border-radius: 14px;
+  padding: 26px 30px;
+}
+
+/* "Username:" / "Password:" prompts. These labels are unnamed, so they are
+   reached through the card. */
+#body label {
+  color: @fg3;
+  font-size: 14px;
+}
+
+/* GtkEntry. Password characters render as dots because gtkgreet sets
+   visibility off for secret prompts; this only styles the box around them.
+
+   letter-spacing is 1px, not the 3px gtklock uses. gtklock only ever shows a
+   password, where wide tracking spaces the dots out nicely. gtkgreet reuses
+   this one entry for the username prompt first and the password prompt after,
+   and there is no CSS state for input-purpose, so it cannot be set per-prompt:
+   3px renders a username as "e z z e d i n". 1px is the compromise.
+
+   font-family is repeated on the entries and buttons below. That is belt and
+   braces, not a fix: the family set on `window` does inherit correctly into
+   all of them (Gtk.StyleContext.get_property("font") reports the same list on
+   the combo's entry as on this one). Stating it explicitly just keeps a theme
+   change from being able to pull one control out of the set. */
+#input-field {
+  min-height: 42px;
+  padding: 0 14px;
+  background-color: @bg0;
+  color: @fg0;
+  caret-color: @yellow;
+  font-family: "Hack Nerd Font", "HackNerdFont", "Noto Sans", sans-serif;
+  font-size: 16px;
+  letter-spacing: 1px;
+  border: 2px solid @bg2;
+  border-radius: 8px;
+  box-shadow: none;
+}
+
+#input-field:focus {
+  border-color: @blue;
+  background-color: #32302f;
+}
+
+#input-field selection {
+  background-color: @blue;
+  color: @bg0;
+}
+
+/* Session picker. Only appears on the first prompt, and only lists more than
+   one entry if /etc/greetd/environments has other sessions in it; `gtkgreet
+   --command sway` is what puts sway first and preselected. */
+#command-selector entry {
+  min-height: 38px;
+  padding: 0 12px;
+  background-color: @bg0;
+  color: @fg1;
+  font-family: "Hack Nerd Font", "HackNerdFont", "Noto Sans", sans-serif;
+  font-size: 14px;
+  letter-spacing: 0;
+  border: 1px solid @bg2;
+  border-radius: 8px;
+  box-shadow: none;
+}
+
+#command-selector entry:focus {
+  border-color: @blue;
+}
+
+#command-selector button {
+  background-image: none;
+  background-color: @bg2;
+  color: @fg1;
+  border: none;
+  border-radius: 0 8px 8px 0;
+}
+
+/* Cancel + "Log in". The latter carries GTK's .suggested-action class. */
+#body button,
+#body button label {
+  color: @fg1;
+  font-family: "Hack Nerd Font", "HackNerdFont", "Noto Sans", sans-serif;
+  font-size: 14px;
+}
+
+#body button {
+  min-height: 38px;
+  margin-top: 12px;
+  padding: 0 18px;
+  background-image: none;
+  background-color: @bg2;
+  border: none;
+  border-radius: 8px;
+}
+
+#body button:hover,
+#body button:hover label {
+  color: @fg0;
+}
+
+#body button:hover {
+  background-color: #5a524c;
+}
+
+/* "Log in" carries GTK's .suggested-action. The `label` half of each of these
+   selectors is load-bearing: Adwaita styles the button's GtkLabel child
+   directly, so a `color` set only on the button node loses to it and the text
+   stays cream -- which on this mint background is very nearly invisible. */
+#body button.suggested-action,
+#body button.suggested-action label {
+  color: @bg0;
+  font-weight: 600;
+}
+
+#body button.suggested-action {
+  background-color: @blue;
+}
+
+#body button.suggested-action:hover {
+  background-color: #93b5a8;
+}

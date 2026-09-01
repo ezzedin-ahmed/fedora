@@ -1,0 +1,71 @@
+# Sway config for the greeter session only. Nothing here is the user's sway
+# config (wm/sway/config) — this compositor runs as the greetd user, exists
+# to host one gtkgreet window, and exits the moment a login succeeds.
+#
+# gtkgreet is not a standalone program: it is a Wayland client and needs a
+# compositor to run in. cage would also do, but sway is already installed by
+# wm/, supports wlr-layer-shell (which gtkgreet needs for --layer-shell, i.e.
+# a window on *every* output), and honours the same input directives as the
+# real session, so the keyboard behaves at the password prompt exactly as it
+# does inside sway.
+#
+# COPIED to /etc/greetd/sway-config by greeter/install.sh. Not a symlink and
+# not live-on-edit — /home/ezzedin is 0700, so the greetd user cannot read
+# this repo at all. Editing this file does nothing until the module is rerun.
+
+# Deliberately NO `include /etc/sway/config.d/*`. The real config includes it
+# for the sway-systemd integration (graphical-session.target, portals, dbus
+# env). The greeter is not a user session and must not start any of that as
+# the greetd user; upstream's shipped gtkgreet-sway.conf omits it too.
+
+# Nothing at the greeter needs X11.
+xwayland disable
+
+# Same wallpaper as the desktop and the lock screen. gtkgreet paints its own
+# dimmed copy over this (see greeter/gtkgreet.css), so this only covers the
+# moment between sway coming up and gtkgreet mapping its window — without it
+# that gap is a black flash.
+output * bg /etc/greetd/background.jpg fill
+
+# Mirrors wm/sway/config, so a password typed here goes through the same
+# layout and the same Caps/Escape swap as one typed in the session.
+input type:keyboard {
+    xkb_layout "us,ara"
+    xkb_options "grp:alt_shift_toggle,caps:swapescape"
+    repeat_delay 200
+    repeat_rate 40
+}
+
+input type:touchpad {
+    tap enabled
+    natural_scroll disabled
+}
+
+# Power off / reboot without logging in first.
+bindsym Mod4+Shift+e exec swaynag \
+    -t warning \
+    -m 'What do you want to do?' \
+    -b 'Poweroff' 'systemctl poweroff' \
+    -b 'Reboot' 'systemctl reboot'
+
+# Blank the outputs if the machine is left sitting at the greeter. Guarded
+# because swayidle is a wm/ dependency, not a greeter/ one.
+exec command -v swayidle >/dev/null && swayidle -w \
+    timeout 300 'swaymsg "output * power off"' \
+         resume 'swaymsg "output * power on"'
+
+# The greeter itself.
+#
+#   --layer-shell   one window per output, so the prompt is on every screen
+#   --command sway  preselects sway in the session picker, the equivalent of
+#                   the old `tuigreet --cmd sway`
+#   GTK_THEME       gtkgreet cannot load a theme from its --style sheet (see
+#                   gtkgreet(1)); Adwaita's dark variant is what makes the
+#                   entry, selection and caret colours sane before the CSS
+#                   touches anything, the same job gtk-theme=Adwaita-dark
+#                   does in wm/gtklock/config.ini
+#
+# `swaymsg exit` is load-bearing: greetd starts the *compositor*, so sway has
+# to terminate once gtkgreet has finalised a login, or the greeter session
+# never ends and the user session never starts.
+exec 'GTK_THEME=Adwaita:dark gtkgreet --layer-shell --command sway --style /etc/greetd/gtkgreet.css; swaymsg exit'
