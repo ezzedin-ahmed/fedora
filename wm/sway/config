@@ -26,7 +26,7 @@ include /etc/sway/config.d/*
 
 ### Startup
 
-exec_always waybar
+exec_always sh -c 'pkill -x waybar; exec waybar'
 exec_always mako
 exec_always /usr/libexec/polkit-gnome-authentication-agent-1
 
