@@ -20,7 +20,7 @@ Each top-level directory is an independent, idempotent module with its own `inst
 | `alacritty/` | — | `~/.config/alacritty` |
 | `fish/` | `chsh -s fish` | `~/.config/fish` |
 | `tmux/` | tmux | `~/.config/tmux` |
-| `nvim/` | neovim, rustup, uv, build toolchain | `~/.config/nvim` |
+| `nvim/` | neovim, rustup, uv, typst, build toolchain | `~/.config/nvim` |
 | `fonts/` | — | `~/.local/share/fonts` |
 | `scripts/` | — | `~/scripts` |
 | `greeter/` | greetd, gtkgreet, sway (tuigreet kept as fallback); **writes `/etc/greetd/{config.toml,sway-config,gtkgreet.css,background.jpg,environments}`** (root, not symlinks) | — |
