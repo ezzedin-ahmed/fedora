@@ -167,7 +167,7 @@
   "custom/lock": {
     "format": "",
     "tooltip": false,
-    "on-click": "gtklock -d"
+    "on-click": "gtklock -d -s $HOME/fedora/wm/gtklock/style.css"
   },
   "custom/logout": {
     "format": "",

@@ -10,7 +10,7 @@
 # does inside sway.
 #
 # COPIED to /etc/greetd/sway-config by greeter/install.sh. Not a symlink and
-# not live-on-edit — /home/ezzedin is 0700, so the greetd user cannot read
+# not live-on-edit — the home directory is 0700, so the greetd user cannot read
 # this repo at all. Editing this file does nothing until the module is rerun.
 
 # Deliberately NO `include /etc/sway/config.d/*`. The real config includes it

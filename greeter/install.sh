@@ -20,7 +20,7 @@ sudo dnf install -y greetd gtkgreet sway tuigreet
 
 # Everything the greeter reads has to be a root-owned copy under /etc/greetd.
 # It cannot be symlinked into this repo the way every other module does it:
-# the greeter runs as the greetd user and /home/ezzedin is 0700, so the whole
+# the greeter runs as the greetd user and this user's home is 0700, so the whole
 # repo -- CSS, wallpaper, sway config -- is unreadable to it. Consequence:
 # none of these three files is live-on-edit. Changing any of them means
 # rerunning this script.

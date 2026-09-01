@@ -26,7 +26,11 @@ window {
   background-color: @bg0;
   background-image:
     linear-gradient(rgba(40, 40, 40, 0.72), rgba(40, 40, 40, 0.72)),
-    url("/home/ezzedin/fedora/wm/wallpapers/background.jpg");
+    /* Relative to THIS file's directory, which is why wm/sway/config passes
+       -s as the repo path: GTK resolves url() against the directory it was
+       given, symlinks not followed, so loading this via ~/.config/gtklock
+       would look for ~/.config/wallpapers and quietly come up empty. */
+    url("../wallpapers/background.jpg");
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;

@@ -195,8 +195,19 @@ bindsym XF86MonBrightnessDown exec brightnessctl set 5%-
 
 # gtklock over swaylock: swaylock draws only a ring, with no field to type into.
 # gtklock is an ext-session-lock client, so the compositor owns the lock and a
-# crashed locker cannot fall through to the desktop. Styling: wm/gtklock/.
-set $lock gtklock -d
+# crashed locker cannot fall through to the desktop.
+#
+# The stylesheet is passed here rather than set in wm/gtklock/config.ini,
+# because that file is a glib key file with no variable expansion and would
+# have to name an absolute path. `exec` hands this to sh(1), so $HOME expands.
+# waybar's lock button (wm/waybar/config) repeats the same command.
+#
+# It must be the repo path, NOT ~/.config/gtklock/style.css. style.css reaches
+# the wallpaper as url("../wallpapers/..."), and GTK resolves that against the
+# directory of the path it was handed without following symlinks -- so via
+# ~/.config/gtklock it would look in ~/.config/wallpapers and silently find
+# nothing.
+set $lock gtklock -d -s $HOME/fedora/wm/gtklock/style.css
 
 bindsym $mod+Escape exec $lock
 
@@ -238,7 +249,9 @@ default_border none
 default_floating_border none
 
 # Wallpaper lives in the repo so it survives ~/Downloads being cleared.
-output * bg /home/ezzedin/fedora/wm/wallpapers/background.jpg fill
+# sway runs `output bg` paths through wordexp(3), so $HOME expands here and
+# the config carries no username.
+output * bg $HOME/fedora/wm/wallpapers/background.jpg fill
 
 ### Gaps
 

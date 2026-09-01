@@ -95,6 +95,11 @@ routing errors into the quickfix list via the tex `errorformat`.
   `rpm -q` / `dnf repolist | grep` / `command -v` checks so reruns are safe.
 - Sway/waybar/alacritty configs use a gruvbox-ish dark palette; sway mod is `Mod4`, vim-style
   `h/j/k/l` navigation throughout.
+- No absolute `/home/<user>` paths anywhere; the repo assumes only that it is checked out at
+  `$HOME/fedora`. Where a config format expands variables, it uses `$HOME` — sway runs `output bg`
+  paths through wordexp(3), and sway `exec` / waybar `on-click` both hand their command to `sh(1)`.
+  Where a format does *not* expand (gtklock's glib key file, GTK CSS), the path is either passed in
+  from a caller that does, or written relative to the file itself.
 
 ## Known inconsistencies
 
@@ -176,7 +181,7 @@ that are *not* live-on-edit — changing either means rerunning its module.
 Nothing in `greeter/` is live. All four files — `config.toml`, `sway-config`, `gtkgreet.css` and the
 wallpaper — are *copied* into `/etc/greetd/`, so a change needs `greeter/install.sh` rerun. They
 cannot be symlinked the way every other module does it: the greeter runs as the `greetd` user and
-`/home/ezzedin` is `0700`, so nothing in this repo is readable to it. That permission bit is the
+the home directory is `0700`, so nothing in this repo is readable to it. That permission bit is the
 whole reason for the copy, and it is why the wallpaper is duplicated rather than shared with
 `wm/sway/config`.
 
@@ -217,8 +222,13 @@ Two separate things, easily conflated:
   There is deliberately **no `[initial_session]`** in `greeter/config.toml`: that is greetd's
   autologin, and it starts a session with no authentication at all, so the first login after a
   shutdown skipped the password entirely.
-- **Lock** — `gtklock` (`wm/gtklock/`), driven by `set $lock` in `wm/sway/config`, which is the one
-  place the command is written. swayidle's `before-sleep` hook is the important one: there is no
+- **Lock** — `gtklock` (`wm/gtklock/`), driven by `set $lock` in `wm/sway/config`, which the
+  keybinding and both swayidle hooks share; waybar's lock button repeats the same command. That is
+  also where `-s` names the stylesheet, because `wm/gtklock/config.ini` is a glib key file with no
+  variable expansion and a `style=` key there would have to spell out an absolute path. `style.css`
+  in turn reaches the wallpaper as `url("../wallpapers/…")`, which GTK resolves against the
+  directory of the path it was handed — symlinks not followed, so the `-s` argument has to be the
+  repo path and not `~/.config/gtklock/style.css`, which would look in `~/.config/wallpapers`. swayidle's `before-sleep` hook is the important one: there is no
   `bindswitch` for the lid, so lid-close falls through to logind's `HandleLidSwitch=suspend` and
   that hook is all that stands between reopening the lid and a live session.
 

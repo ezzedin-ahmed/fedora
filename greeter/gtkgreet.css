@@ -27,7 +27,7 @@
 
    This file is COPIED to /etc/greetd/gtkgreet.css by greeter/install.sh; it
    is not symlinked and not live-on-edit. It cannot be: the greeter runs as
-   the greetd user and /home/ezzedin is 0700, so nothing under this repo is
+   the greetd user and this user's home is 0700, so nothing under this repo is
    readable to it. Same reason the wallpaper is copied to /etc/greetd. */
 
 @define-color bg0    #282828;
