@@ -50,7 +50,8 @@ sudo dnf install -y \
   android-tools \
   NetworkManager \
   iwlwifi-mvm-firmware \
-  vnstat
+  vnstat \
+  mpv
 
 if ! rpm -q rpmfusion-free-release >/dev/null 2>&1; then
   sudo dnf install "https://mirrors.rpmfusion.org/free/fedora/rpmfusion-free-release-${FEDORA_VERSION}.noarch.rpm"
