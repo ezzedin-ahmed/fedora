@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# tmux-sessionizer — fzf over git repos in ~/Projects (max 2 levels deep).
+# tmux-sessionizer — fzf over git repos in ~/projects (max 2 levels deep).
 #
 #   Picking a repo attaches to its session, creating it only if it doesn't
 #   exist yet. Layout: window 1 = nvim, windows 2-4 = bash, all cwd'd to
@@ -11,7 +11,7 @@
 
 set -euo pipefail
 
-PROJECTS_ROOT="${PROJECTS_ROOT:-$HOME/Projects}"
+PROJECTS_ROOT="${PROJECTS_ROOT:-$HOME/projects}"
 EXTRA_WINDOWS=3
 
 die() {

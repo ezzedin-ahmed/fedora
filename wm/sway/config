@@ -33,6 +33,7 @@ exec_always /usr/libexec/polkit-gnome-authentication-agent-1
 ### Default terminal
 
 bindsym $mod+Return exec $terminal
+bindsym $mod+Shift+Return exec $terminal -e "$HOME/scripts/tmux-sessionizer"
 
 ### Application launcher
 
