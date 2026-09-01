@@ -192,16 +192,24 @@ bindsym XF86MonBrightnessDown exec brightnessctl set 5%-
 
 ### Lock
 
-# bindsym $mod+l exec swaylock -f -c 000000
+# gtklock over swaylock: swaylock draws only a ring, with no field to type into.
+# gtklock is an ext-session-lock client, so the compositor owns the lock and a
+# crashed locker cannot fall through to the desktop. Styling: wm/gtklock/.
+set $lock gtklock -d
+
+bindsym $mod+Escape exec $lock
 
 ### Idle
 
+# before-sleep is the important one on a laptop: with no bindswitch here, closing
+# the lid falls through to logind's HandleLidSwitch=suspend, and this is the only
+# thing between the lid opening again and a live session.
 exec swayidle \
     -w \
-    timeout 300 'swaylock -f -c 000000' \
+    timeout 300 '$lock' \
     timeout 600 'swaymsg "output * power off"' \
     resume 'swaymsg "output * power on"' \
-    before-sleep 'swaylock -f -c 000000'
+    before-sleep '$lock'
 
 ### Keyboard
 

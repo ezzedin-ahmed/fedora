@@ -1,0 +1,125 @@
+/* gtklock — gruvbox dark, palette matches wm/waybar/style.css and
+   alacritty/colors.toml.
+
+   GTK3 CSS (gtklock links libgtk-3). @define-color works; CSS custom
+   properties do not. Widget names come from gtk_widget_set_name(), so they are
+   addressed as #name. */
+
+@define-color bg0    #282828;
+@define-color bg1    #3c3836;
+@define-color bg2    #504945;
+
+@define-color fg0    #fbf1c7;
+@define-color fg1    #ebdbb2;
+@define-color fg3    #bdae93;
+@define-color fg4    #a89984;
+
+@define-color red    #fb4934;
+@define-color yellow #fabd2f;
+@define-color blue   #83a598;
+
+/* The wallpaper, dimmed. GTK3 takes stacked background layers, so a flat
+   translucent gruvbox wash sits over the image — that keeps the clock and the
+   entry legible over a light patch without needing a separate blurred asset
+   (upstream swaylock has no blur, and swaylock-effects is not packaged). */
+window {
+  background-color: @bg0;
+  background-image:
+    linear-gradient(rgba(40, 40, 40, 0.72), rgba(40, 40, 40, 0.72)),
+    url("/home/ezzedin/fedora/wm/wallpapers/background.jpg");
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  font-family: "Hack Nerd Font", "HackNerdFont", "Noto Sans", sans-serif;
+  color: @fg1;
+}
+
+/* Clock block, sitting above the form. */
+#time-box {
+  margin-bottom: 28px;
+}
+
+#clock-label {
+  color: @fg0;
+  font-size: 76px;
+  font-weight: 300;
+  letter-spacing: 2px;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
+}
+
+#date-label {
+  color: @fg4;
+  font-size: 17px;
+  margin-top: 2px;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+}
+
+/* The card holding the password form — the "clear place to type". */
+#window-box {
+  background-color: rgba(60, 56, 54, 0.92);
+  border: 1px solid @bg2;
+  border-radius: 14px;
+  padding: 26px 30px;
+}
+
+#input-label {
+  color: @fg3;
+  font-size: 14px;
+  margin-bottom: 10px;
+}
+
+/* GtkEntry. Password characters render as dots because gtklock sets
+   visibility off; this only styles the box around them. */
+#input-field {
+  min-width: 300px;
+  min-height: 42px;
+  padding: 0 14px;
+  background-color: @bg0;
+  color: @fg0;
+  caret-color: @yellow;
+  font-size: 16px;
+  letter-spacing: 3px;
+  border: 2px solid @bg2;
+  border-radius: 8px;
+  box-shadow: none;
+}
+
+#input-field:focus {
+  border-color: @blue;
+  background-color: #32302f;
+}
+
+#input-field selection {
+  background-color: @blue;
+  color: @bg0;
+}
+
+#unlock-button {
+  min-height: 38px;
+  margin-top: 12px;
+  padding: 0 18px;
+  background-image: none;
+  background-color: @bg2;
+  color: @fg1;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+}
+
+#unlock-button:hover {
+  background-color: #5a524c;
+  color: @fg0;
+}
+
+/* Wrong password / caps lock. */
+#error-label {
+  color: @red;
+  font-size: 14px;
+  margin-top: 12px;
+}
+
+#warning-label {
+  color: @yellow;
+  font-size: 14px;
+  margin-top: 12px;
+}

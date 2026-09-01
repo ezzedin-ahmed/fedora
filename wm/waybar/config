@@ -166,7 +166,7 @@
   "custom/lock": {
     "format": "",
     "tooltip": false,
-    "on-click": "swaylock -f -c 000000"
+    "on-click": "gtklock -d"
   },
   "custom/logout": {
     "format": "",

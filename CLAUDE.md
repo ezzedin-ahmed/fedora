@@ -16,7 +16,7 @@ Each top-level directory is an independent, idempotent module with its own `inst
 | --- | --- | --- |
 | `base/` | core CLI tooling, RPM Fusion repos | — |
 | `containers/` | docker-ce, k3s (server, kubeconfig mode 644), writes `~/.kube/config` | — |
-| `wm/` | sway, waybar, mako, pipewire, mesa/vulkan, bluetooth, media | `~/.config/{sway,waybar,mako,fuzzel}` |
+| `wm/` | sway, waybar, mako, gtklock, pipewire, mesa/vulkan, bluetooth, media | `~/.config/{sway,waybar,mako,fuzzel,gtklock}` |
 | `alacritty/` | — | `~/.config/alacritty` |
 | `fish/` | `chsh -s fish` | `~/.config/fish` |
 | `tmux/` | tmux | `~/.config/tmux` |
@@ -105,3 +105,14 @@ Verify before assuming these are intentional:
   here is sway — those modules will not populate. Sway equivalents are `sway/workspaces` and
   `sway/window`.
 - `scripts/pstats` documents itself as `gitcheck` in its header and usage text.
+
+## Lock screen
+
+`gtklock` (`wm/gtklock/`) is the locker, driven by `set $lock` in `wm/sway/config`, which is the one
+place the command is written. swayidle's `before-sleep` hook is the important one: there is no
+`bindswitch` for the lid, so lid-close falls through to logind's `HandleLidSwitch=suspend` and
+that hook is all that stands between reopening the lid and a live session.
+
+Upstream `swaylock` was replaced because it draws only a ring — no field to type into, no clock —
+and `swaylock-effects` is not packaged for Fedora. gtklock is an `ext-session-lock` client, so the
+compositor owns the lock and a crashed locker cannot fall through to the desktop.

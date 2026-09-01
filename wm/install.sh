@@ -13,6 +13,7 @@ ln -vfsn $HOME/fedora/wm/sway $HOME/.config/sway
 ln -vfsn $HOME/fedora/wm/waybar $HOME/.config/waybar
 ln -vfsn $HOME/fedora/wm/mako $HOME/.config/mako
 ln -vfsn $HOME/fedora/wm/fuzzel/ $HOME/.config/fuzzel
+ln -vfsn $HOME/fedora/wm/gtklock $HOME/.config/gtklock
 
 # GTK ships these as real (often empty) directories; ln -s into an existing
 # directory would nest instead of replacing, so clear them out first.
@@ -47,7 +48,7 @@ sudo dnf install -y \
   sway-systemd \
   swaybg \
   swayidle \
-  swaylock \
+  gtklock \
   waybar \
   fuzzel \
   mako \
