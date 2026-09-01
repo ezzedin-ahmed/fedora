@@ -1,4 +1,4 @@
 #!/usr/bin/env bash
-set -Eeou pipfail
+set -Eeou pipefail
 
 sudo dnf install -y vlc
