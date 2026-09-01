@@ -71,6 +71,30 @@ sudo dnf install -y \
 
 sudo systemctl enable --now power-profiles-daemon
 
+# Discrete-GPU power. The Quadro cannot runtime-suspend on this hardware (no
+# ACPI _PR3 on the root port), so a loaded driver pins it at D0 all session.
+# Keeping the modules off at boot lets the card sit in D3hot instead; gpu-up /
+# gpu-run bring it back when it is wanted. See wm/nvidia-ondemand.conf.
+sudo install -Dm644 "$HOME/fedora/wm/nvidia-ondemand.conf" \
+  /etc/modprobe.d/nvidia-ondemand.conf
+
+# nvidia-powerd drives Dynamic Boost, which this GPU reports as "Not
+# Supported"; leaving it enabled only reloads the modules at every boot and
+# undoes the blacklist above.
+if systemctl is-enabled nvidia-powerd.service >/dev/null 2>&1; then
+  sudo systemctl disable --now nvidia-powerd.service
+fi
+
+# The blacklist only governs the *next* boot, so drop the driver now too and
+# the card reaches D3hot without a reboot. Best-effort on purpose: run from a
+# session that is still holding the GPU (a pre-pin sway, a live CUDA process)
+# and modprobe -r fails with EBUSY, which must not abort the rest of this
+# script under `set -e`. gpu-down names whatever is holding it.
+if lsmod | grep -q '^nvidia '; then
+  "$HOME/fedora/scripts/gpu-down" ||
+    echo "warning: NVIDIA driver still loaded; it will stay unloaded from the next boot" >&2
+fi
+
 sudo dnf install -y google-noto-fonts-all
 fc-cache -f
 

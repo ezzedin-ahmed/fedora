@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+#
+# Run one command on the discrete NVIDIA GPU (PRIME render offload).
+#
+# Sway is pinned to the Intel iGPU via WLR_DRM_DEVICES in the greetd session
+# command, so nothing touches the Quadro unless it is asked to. This is the
+# asking:
+#
+#   prime-run glxinfo -B          # should print the Quadro, not HD Graphics
+#   prime-run vkcube
+#   prime-run blender
+#
+# Offload is client-side, so it works fine with the compositor on Intel: the
+# app renders on the dGPU and hands the result over as a dma-buf. It needs
+# nvidia_drm.modeset=1, which the Fedora akmod sets by default.
+#
+# This is for GRAPHICS only. CUDA compute -- notebooks, torch, tensorflow,
+# anything on libcuda.so -- addresses the card directly and needs none of
+# this; run it plain.
+
+set -Eeuo pipefail
+
+if [ $# -eq 0 ]; then
+  echo "usage: prime-run <command> [args...]" >&2
+  exit 2
+fi
+
+# __NV_PRIME_RENDER_OFFLOAD is the switch that actually moves rendering to the
+# dGPU. The other three tell each API which vendor to load, because on a glvnd
+# system both drivers are always present:
+#   - GLX (Xwayland clients) selects a vendor by name.
+#   - EGL (native Wayland clients) has no name knob, so the vendor library
+#     search list is narrowed to nvidia's ICD instead.
+#   - Vulkan enumerates every ICD regardless; NVIDIA_only promotes the Quadro
+#     to device 0, which is what apps that just take the first device pick.
+export __NV_PRIME_RENDER_OFFLOAD=1
+export __GLX_VENDOR_LIBRARY_NAME=nvidia
+export __EGL_VENDOR_LIBRARY_FILENAMES=/usr/share/glvnd/egl_vendor.d/10_nvidia.json
+export __VK_LAYER_NV_optimus=NVIDIA_only
+
+exec "$@"

@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# gpu-run — run one command with the NVIDIA driver loaded, then unload it.
+#
+#   gpu-run jupyter lab
+#   gpu-run python train.py
+#
+# For CUDA work this is all you need: compute talks to the card directly, no
+# offload variables involved. For a *graphical* app that should render on the
+# Quadro, compose the two: gpu-run prime-run blender
+
+set -Eeuo pipefail
+
+if [ $# -eq 0 ]; then
+  echo "usage: gpu-run <command> [args...]" >&2
+  exit 2
+fi
+
+# Only tear down what we brought up. If the driver was already loaded, someone
+# else is using it and unloading out from under them would be rude.
+if lsmod | grep -q '^nvidia '; then
+  WAS_LOADED=1
+else
+  WAS_LOADED=0
+fi
+
+cleanup() {
+  if [ "$WAS_LOADED" -eq 0 ]; then
+    # Best-effort: a leftover process keeping the modules busy should not turn a
+    # successful run into a failure, and gpu-down already says what is stuck.
+    gpu-down || echo "gpu-run: GPU left loaded; run gpu-down once it is free." >&2
+  fi
+}
+trap cleanup EXIT
+
+if [ "$WAS_LOADED" -eq 0 ]; then
+  gpu-up
+fi
+
+# Not exec: the EXIT trap has to survive the command so the card gets unloaded.
+"$@"

@@ -16,7 +16,7 @@ Each top-level directory is an independent, idempotent module with its own `inst
 | --- | --- | --- |
 | `base/` | core CLI tooling, RPM Fusion repos | — |
 | `containers/` | docker-ce, k3s (server, kubeconfig mode 644), writes `~/.kube/config` | — |
-| `wm/` | sway, waybar, mako, gtklock, pipewire, mesa/vulkan, bluetooth, media | `~/.config/{sway,waybar,mako,fuzzel,gtklock}` |
+| `wm/` | sway, waybar, mako, gtklock, pipewire, mesa/vulkan, bluetooth, media; **writes `/etc/modprobe.d/nvidia-ondemand.conf`** (root, not a symlink) | `~/.config/{sway,waybar,mako,fuzzel,gtklock}` |
 | `alacritty/` | — | `~/.config/alacritty` |
 | `fish/` | `chsh -s fish` | `~/.config/fish` |
 | `tmux/` | tmux | `~/.config/tmux` |
@@ -64,6 +64,11 @@ package, and under `set -e` a failed install would otherwise skip every link.
   Re-running it stops an active recording (SIGINT, so the container is finalised) and copies the
   path. Bound to `$mod+Print`; needs RPM Fusion's `ffmpeg` for libx264, which `wm/install.sh`
   swaps in over Fedora's `ffmpeg-free`.
+- `gpu-up` / `gpu-down` / `gpu-run` — on-demand NVIDIA driver lifecycle, the same shape as the k3s
+  pair: the modules are blacklisted at boot so the card sits in D3hot, and these load/unload it.
+  `gpu-run <cmd>` does both around one command and only unloads what it loaded.
+- `prime-run` — runs one command on the discrete NVIDIA GPU via PRIME render offload. See
+  "Hybrid graphics" below.
 - `playvid`, `gentasks`, `calendar_svg` — fzf video picker; recurring-task markdown generator;
   SVG month calendar to clipboard.
 
@@ -106,6 +111,75 @@ Verify before assuming these are intentional:
   here is sway — those modules will not populate. Sway equivalents are `sway/workspaces` and
   `sway/window`.
 - `scripts/pstats` documents itself as `gitcheck` in its header and usage text.
+
+## Hybrid graphics
+
+Optimus laptop: Intel HD 530 (`i915`) plus an NVIDIA Quadro M1000M on the proprietary 580xx akmod.
+Every connector — the eDP panel and all the HDMI/DP ports — is wired to the Intel side; the NVIDIA
+card has no display attached.
+
+The compositor is pinned to the iGPU and the dGPU is opt-in per application:
+
+- **Pin** — done by absence, not by environment. The NVIDIA modules are blacklisted at boot (see
+  "Powering the card down"), so no nvidia DRM node exists when greetd starts sway: `/dev/dri` holds
+  only the Intel card and wlroots has nothing else it could pick. If the driver *were* loaded at
+  boot, `nvidia_drm.modeset=1` would make wlroots enumerate the Quadro and possibly take it as the
+  primary renderer — every frame drawn on the dGPU and copied back to Intel for scanout.
+
+  This now covers *two* wlroots compositors, not one: since the greeter is gtkgreet hosted in its
+  own sway (see "Lock screen and login"), the login screen would pick the wrong GPU on exactly the
+  same terms as the session. The blacklist is upstream of both, so both are covered by the one
+  mechanism.
+
+  Historical trap, still worth knowing before reverting to tuigreet: `WLR_DRM_DEVICES` inlined into
+  tuigreet's `--cmd` does not work. tuigreet does not word-split that value before passing it to
+  greetd, so `--cmd 'env WLR_DRM_DEVICES=... sway'` makes greetd exec a binary named
+  `env WLR_DRM_DEVICES=... sway`, which ENOENTs: PAM authenticates, the session opens and closes in
+  the same second, and the greeter reappears with no sway output in the journal. tuigreet's `--cmd`
+  must stay a single argv-safe token. greetd's own `command` has never had this problem — greetd(5)
+  says it is run by `sh(1)` — which is why the current `command = "sway --config ..."` is fine.
+- **Opt in, graphics** — `scripts/prime-run <cmd>` sets `__NV_PRIME_RENDER_OFFLOAD` plus the per-API
+  vendor selectors (GLX by name, EGL by narrowing the glvnd vendor list, Vulkan via
+  `__VK_LAYER_NV_optimus`). Offload is client-side, so it works with the compositor on Intel: the
+  app renders on the Quadro and hands over a dma-buf. Verify with `prime-run vulkaninfo --summary`
+  — the Quadro should be device 0.
+- **Opt in, compute** — nothing to do. CUDA (notebooks, torch, tensorflow, anything linking
+  `libcuda.so`) addresses the card directly and never goes through the compositor's render path, so
+  `prime-run` is neither needed nor useful there. Caveat is hardware, not config: the M1000M is
+  Maxwell / compute capability 5.0, which current upstream torch wheels no longer ship kernels for.
+
+Net effect: the Quadro is idle (`nvidia-smi` shows no processes) unless a `prime-run` command or a
+CUDA process asks for it.
+
+### Powering the card down
+
+Idle is not the same as off, and **this hardware cannot power the GPU down by itself**. NVIDIA
+runtime D3 needs an ACPI `_PR3` power resource on the PCIe root port — this Skylake board exposes
+only `power_resources_D0/D2/D3hot` — plus video-memory-off in hardware, which Maxwell lacks. The
+driver says as much: `/proc/driver/nvidia/gpus/*/power` reports `Runtime D3 status: Disabled by
+default`, `Video Memory Off: Not Supported`. So a loaded driver holds the card at `D0` whether or
+not anything is using it.
+
+Unbinding is the only lever, so the card is kept unbound by default:
+
+- `wm/nvidia-ondemand.conf` → `/etc/modprobe.d/nvidia-ondemand.conf` blacklists the four modules.
+  `blacklist` suppresses only udev's modalias autoload; loading by name still works, so `gpu-up`,
+  dependency loads, and the setuid `nvidia-modprobe` helper that CUDA apps call are all unaffected.
+  A notebook that asks for the GPU therefore still brings the driver up on its own — `gpu-down` (or
+  `gpu-run`) is what puts it back.
+- `wm/install.sh` also disables `nvidia-powerd`, which drives Dynamic Boost (reported `Not
+  Supported` here) and would reload the modules at every boot.
+- `gpu-down` re-asserts `power/control=auto` after unloading, because
+  `/usr/lib/udev/rules.d/80-nvidia-pm.rules` sets it back to `on` at unbind — which would otherwise
+  pin the device at D0 with nothing even bound to it.
+
+Check with `cat /sys/bus/pci/devices/0000:01:00.0/power_state`: `D3hot` unloaded, `D0` loaded.
+
+Nothing here is a manual step. `wm/install.sh` writes the modprobe file, disables `nvidia-powerd`
+and drops the driver once so the change lands without a reboot; `scripts/install.sh` symlinks the
+whole `scripts/` directory, so the `gpu-*` and `prime-run` commands need no separate wiring. The
+root copies (`/etc/modprobe.d/nvidia-ondemand.conf`, everything under `/etc/greetd/`) are the parts
+that are *not* live-on-edit — changing either means rerunning its module.
 
 Nothing in `greeter/` is live. All four files — `config.toml`, `sway-config`, `gtkgreet.css` and the
 wallpaper — are *copied* into `/etc/greetd/`, so a change needs `greeter/install.sh` rerun. They

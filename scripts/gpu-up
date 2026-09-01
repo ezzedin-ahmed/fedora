@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# gpu-up — load the NVIDIA driver so the Quadro can be used.
+#
+# The modules are blacklisted from autoloading at boot (see
+# /etc/modprobe.d/nvidia-ondemand.conf, installed by wm/install.sh), so the card
+# sits in D3hot until this runs. Pair with gpu-down when you are finished, or
+# use gpu-run to do both around a single command.
+#
+# Blacklisting only blocks udev's modalias-based autoload; modprobe by name,
+# and dependency loads, still work -- which is exactly what this relies on.
+
+set -Eeuo pipefail
+
+DEV=0000:01:00.0
+
+if lsmod | grep -q '^nvidia '; then
+  echo "NVIDIA driver already loaded."
+else
+  # nvidia_drm pulls in nvidia_modeset and nvidia, and the distro's
+  # "softdep nvidia post: nvidia-uvm" pulls in nvidia_uvm for CUDA -- so this
+  # one modprobe brings up the whole stack. modeset=1 is what PRIME render
+  # offload needs; without it prime-run can only do compute, not graphics.
+  echo "Loading NVIDIA modules..."
+  sudo modprobe nvidia_drm modeset=1
+fi
+
+# The driver holds the card in D0 for as long as it is loaded: this machine has
+# no ACPI _PR3 on the PCIe root port, so runtime D3 is unavailable and the GPU
+# cannot idle itself down. That is the whole reason for the up/down pair.
+echo "PCI power state: $(cat /sys/bus/pci/devices/$DEV/power_state)"
+nvidia-smi --query-gpu=name,memory.used --format=csv,noheader
