@@ -11,7 +11,7 @@
   "modules-right": [
     "group/stats",
     "idle_inhibitor",
-    "sway/language",
+    "custom/language",
     "tray",
     "group/network",
     "bluetooth",
@@ -74,9 +74,10 @@
   "sway/mode": {
     "format": "{}"
   },
-  "sway/language": {
-    "format": "  {short}",
-    "tooltip-format": "{long}",
+  "custom/language": {
+    "exec": "~/scripts/kblayout",
+    "return-type": "json",
+    "format": "  {}",
     "on-click": "swaymsg input type:keyboard xkb_switch_layout next"
   },
   "idle_inhibitor": {

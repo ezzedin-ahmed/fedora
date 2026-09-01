@@ -1,0 +1,111 @@
+#!/usr/bin/env python3
+"""Emit the active sway keyboard layout as a waybar custom module.
+
+Replaces waybar's built-in sway/language module, which goes permanently blank
+after a suspend/resume cycle: it builds its layout table once at startup from
+IPC_GET_INPUTS, and the input add/remove churn sway emits on resume wipes it
+(sway can even end up listing a device such as 0:6:Video_Bus twice).  Once
+blanked it never recovers, not even on a layout switch -- only a waybar
+restart brings it back.
+
+This re-reads the layout from sway on every input event instead of caching a
+table, so device churn heals itself.  Runs forever, one JSON line per change.
+"""
+
+import json
+import subprocess
+import sys
+
+RULES = "/usr/share/X11/xkb/rules/evdev.lst"
+
+# Pseudo-keyboards (lid switch, hotkey blocks, ACPI buttons) carry an xkb layout
+# but never type; grp:alt_shift_toggle only switches the device that saw the key,
+# so prefer a keyboard someone can actually type on.
+PSEUDO = ("Video_Bus", "Sleep_Button", "Power_Button", "Lid_Switch", "hotkeys")
+
+
+def short_names():
+    """Map xkb layout description -> code, e.g. 'English (US)' -> 'us'."""
+    names = {}
+    try:
+        with open(RULES) as fh:
+            in_layouts = False
+            for line in fh:
+                if line.startswith("!"):
+                    in_layouts = line.startswith("! layout")
+                    continue
+                if in_layouts and line.strip():
+                    code, _, desc = line.strip().partition(" ")
+                    names.setdefault(desc.strip(), code)
+    except OSError:
+        pass
+    return names
+
+
+def keyboards():
+    out = subprocess.run(
+        ["swaymsg", "-t", "get_inputs", "-r"], capture_output=True, text=True
+    ).stdout
+    return [
+        i
+        for i in json.loads(out or "[]")
+        if i.get("type") == "keyboard" and i.get("xkb_active_layout_name")
+    ]
+
+
+def pick(inputs):
+    real = [i for i in inputs if not any(p in i["identifier"] for p in PSEUDO)]
+    return (real or inputs or [None])[0]
+
+
+def emit(long_name, names):
+    print(
+        json.dumps(
+            {
+                "text": names.get(long_name, long_name),
+                "tooltip": long_name,
+                "class": "language",
+            }
+        ),
+        flush=True,
+    )
+
+
+def main():
+    names = short_names()
+    last = None
+
+    def show(long_name):
+        nonlocal last
+        if long_name and long_name != last:
+            last = long_name
+            emit(long_name, names)
+
+    current = pick(keyboards())
+    show(current["xkb_active_layout_name"] if current else None)
+
+    sub = subprocess.Popen(
+        ["swaymsg", "-t", "subscribe", "-m", '["input"]'],
+        stdout=subprocess.PIPE,
+        text=True,
+    )
+    for line in sub.stdout:
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        device = event.get("input", {})
+        # A layout switch reports the device that saw the key; anything else
+        # (added/removed/libinput) means re-read, since the payload may be stale.
+        if event.get("change") == "xkb_layout" and device.get("xkb_active_layout_name"):
+            if not any(p in device.get("identifier", "") for p in PSEUDO):
+                show(device["xkb_active_layout_name"])
+        else:
+            current = pick(keyboards())
+            if current:
+                show(current["xkb_active_layout_name"])
+    return sub.wait()
+
+
+if __name__ == "__main__":
+    sys.exit(main())

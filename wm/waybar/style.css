@@ -96,7 +96,7 @@ tooltip label {
 #pulseaudio,
 #backlight,
 #idle_inhibitor,
-#language,
+#custom-language,
 #network,
 #bluetooth,
 #battery,
@@ -123,7 +123,7 @@ tooltip label {
 #idle_inhibitor:hover,
 #network:hover,
 #bluetooth:hover,
-#language:hover,
+#custom-language:hover,
 #pulseaudio:hover,
 #backlight:hover {
   color: @fg0;
@@ -139,7 +139,7 @@ tooltip label {
   color: @yellow;
 }
 
-#language {
+#custom-language {
   color: @aqua;
 }
 
