@@ -1,0 +1,79 @@
+#!/usr/bin/env bash
+# pdf2img -- render PDF pages to images with pdftoppm (poppler-utils).
+#
+# Usage: pdf2img [-f png|jpeg|tiff] [-r DPI] [-p FIRST[-LAST]] [-o OUTDIR] FILE.pdf
+#
+#   -f  output format          (default png)
+#   -r  resolution in DPI      (default 150)
+#   -p  page or page range     (default all pages)
+#   -o  output directory       (default <pdf-stem>/ next to the PDF)
+#
+# Pages are written as OUTDIR/<pdf-stem>-N.png; pdftoppm pads N to the page-count
+# width, so the files sort in page order.
+set -Eeuo pipefail
+
+usage() {
+    sed -n '2,12p' "$0" | sed 's/^# \?//'
+    exit "${1:-0}"
+}
+
+FORMAT=png
+DPI=150
+PAGES=""
+OUTDIR=""
+
+while getopts ':f:r:p:o:h' opt; do
+    case "$opt" in
+        f) FORMAT="$OPTARG" ;;
+        r) DPI="$OPTARG" ;;
+        p) PAGES="$OPTARG" ;;
+        o) OUTDIR="$OPTARG" ;;
+        h) usage ;;
+        :) echo "pdf2img: -$OPTARG needs an argument" >&2; usage 1 ;;
+        ?) echo "pdf2img: unknown option -$OPTARG" >&2; usage 1 ;;
+    esac
+done
+shift $((OPTIND - 1))
+
+if ! command -v pdftoppm >/dev/null 2>&1; then
+    echo "pdf2img: pdftoppm not found -- sudo dnf install poppler-utils" >&2
+    exit 1
+fi
+
+if [[ $# -ne 1 ]]; then
+    usage 1
+fi
+
+PDF="$1"
+
+if [[ ! -f "$PDF" ]]; then
+    echo "pdf2img: no such file: $PDF" >&2
+    exit 1
+fi
+
+case "$FORMAT" in
+    png)       FLAG=-png ;;
+    jpg|jpeg)  FLAG=-jpeg; FORMAT=jpg ;;
+    tif|tiff)  FLAG=-tiff; FORMAT=tif ;;
+    *) echo "pdf2img: unsupported format: $FORMAT (png, jpeg, tiff)" >&2; exit 1 ;;
+esac
+
+STEM="$(basename "$PDF")"
+STEM="${STEM%.[Pp][Dd][Ff]}"
+: "${OUTDIR:=$(dirname "$PDF")/$STEM}"
+
+RANGE=()
+if [[ -n "$PAGES" ]]; then
+    if [[ ! "$PAGES" =~ ^([0-9]+)(-([0-9]+))?$ ]]; then
+        echo "pdf2img: bad page range: $PAGES (expected N or N-M)" >&2
+        exit 1
+    fi
+    RANGE=(-f "${BASH_REMATCH[1]}" -l "${BASH_REMATCH[3]:-${BASH_REMATCH[1]}}")
+fi
+
+mkdir -p "$OUTDIR"
+
+pdftoppm "$FLAG" -r "$DPI" "${RANGE[@]}" -- "$PDF" "$OUTDIR/$STEM"
+
+COUNT=$(find "$OUTDIR" -maxdepth 1 -name "$STEM-*.$FORMAT" -type f | wc -l)
+echo "pdf2img: wrote $COUNT page(s) to $OUTDIR"

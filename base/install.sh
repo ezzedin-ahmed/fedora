@@ -23,6 +23,7 @@ sudo dnf install -y \
   xz \
   p7zip \
   p7zip-plugins \
+  poppler-utils \
   jq \
   tree \
   file \
