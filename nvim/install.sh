@@ -11,6 +11,7 @@ sudo dnf install -y \
   gcc \
   gcc-c++ \
   make \
+  just \
   pkg-config \
   openssl-devel \
   golang
