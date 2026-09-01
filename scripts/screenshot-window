@@ -7,7 +7,14 @@ mkdir -p "$DIR"
 
 FILE="$DIR/$(date '+%Y-%m-%d_%H-%M-%S').png"
 
-grim -g "$(slurp -o)" "$FILE"
+# slurp exits non-zero when the selection is cancelled with Escape; without
+# this guard grim runs on an empty geometry and errors out.
+GEOMETRY="$(slurp -o)" || exit 0
+if [[ -z "$GEOMETRY" ]]; then
+    exit 0
+fi
+
+grim -g "$GEOMETRY" "$FILE"
 
 wl-copy < "$FILE"
 

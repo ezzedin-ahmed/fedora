@@ -57,7 +57,12 @@ package, and under `set -e` a failed install would otherwise skip every link.
 - `k3s-up` / `k3s-down` — on-demand k3s lifecycle. k3s is deliberately **not** enabled at boot;
   `k3s-down` runs `k3s-killall.sh` and verifies only `k8s.io`-namespace shims are gone (Docker's
   `moby` shims must survive).
-- `screenshot`, `screenshot-window`, `screen-record` — grim/slurp/ffmpeg, save + `wl-copy` + notify.
+- `screenshot`, `screenshot-window` — grim + slurp (`-o` for a whole output), save + `wl-copy` +
+  notify. Both exit quietly if the selection is cancelled.
+- `screen-record` — wf-recorder + slurp to an mp4 in `~/Videos/Recordings`; `-a` adds audio.
+  Re-running it stops an active recording (SIGINT, so the container is finalised) and copies the
+  path. Bound to `$mod+Print`; needs RPM Fusion's `ffmpeg` for libx264, which `wm/install.sh`
+  swaps in over Fedora's `ffmpeg-free`.
 - `playvid`, `gentasks`, `calendar_svg` — fzf video picker; recurring-task markdown generator;
   SVG month calendar to clipboard.
 

@@ -165,7 +165,12 @@ bindsym $mod+r mode "resize"
 
 ### Screenshots
 
-bindsym Print exec ~/fedora/dotfiles/sway/scripts/screenshot
+# ~/scripts is on PATH via fish/config.fish, so these are bare names. The old
+# binding pointed at ~/fedora/dotfiles/sway/scripts/screenshot, a path from a
+# layout this repo no longer uses -- Print silently did nothing.
+bindsym Print exec screenshot
+bindsym Shift+Print exec screenshot-window
+bindsym $mod+Print exec screen-record
 
 ### Audio
 

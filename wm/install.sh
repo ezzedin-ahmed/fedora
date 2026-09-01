@@ -54,6 +54,7 @@ sudo dnf install -y \
   wl-clipboard \
   grim \
   slurp \
+  wf-recorder \
   brightnessctl \
   playerctl \
   pavucontrol \
@@ -72,6 +73,18 @@ sudo systemctl enable --now power-profiles-daemon
 sudo dnf install -y google-noto-fonts-all
 fc-cache -f
 
+# Fedora ships ffmpeg-free (no libx264/libx265, hardware encoders only). RPM
+# Fusion's ffmpeg is the full build, and the two conflict because both Provide
+# ffmpeg-free -- so a plain `dnf install ffmpeg` fails the entire transaction
+# rather than replacing it. Swap explicitly, and only once.
+if ! rpm -q ffmpeg >/dev/null 2>&1; then
+  if rpm -q ffmpeg-free >/dev/null 2>&1; then
+    sudo dnf swap -y --allowerasing ffmpeg-free ffmpeg
+  else
+    sudo dnf install -y ffmpeg
+  fi
+fi
+
 sudo dnf install -y \
   pipewire \
   pipewire-pulseaudio \
@@ -82,7 +95,6 @@ sudo dnf install -y \
   bluez \
   bluez-tools \
   blueman \
-  ffmpeg \
   v4l2loopback \
   v4l-utils \
   yt-dlp

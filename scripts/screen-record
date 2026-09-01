@@ -1,26 +1,52 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
+# Record a selected region of the Wayland session.
+#
+# Usage:
+#   screen-record        record a region, no audio
+#   screen-record -a     record a region, with audio from the default source
+#
+# Run it again while a recording is active to stop it. wf-recorder writes h264
+# via libx264, which comes from RPM Fusion's ffmpeg (wm/install.sh swaps the
+# stripped ffmpeg-free out for it).
+
 DIR="$HOME/Videos/Recordings"
+
+AUDIO=0
+if [[ "${1:-}" == "-a" || "${1:-}" == "--audio" ]]; then
+    AUDIO=1
+fi
+
+# Toggle. wf-recorder needs SIGINT, not SIGKILL, to write the trailer -- killed
+# outright it leaves a file no player will open. pkill returns 0 only if it
+# actually signalled something, which doubles as the "already recording" test.
+if pkill -INT -x wf-recorder 2>/dev/null; then
+    notify-send "Screen recording" "Stopping, finalising file"
+    exit 0
+fi
 
 mkdir -p "$DIR"
 
-FILE="$DIR/$(date '+%Y-%m-%d_%H-%M-%S').mkv"
-
-GEOMETRY="$(slurp)"
-
+# slurp exits non-zero when the selection is cancelled with Escape.
+GEOMETRY="$(slurp)" || exit 0
 if [[ -z "$GEOMETRY" ]]; then
     exit 0
 fi
 
-notify-send "Screen recording" "Recording started"
+FILE="$DIR/$(date '+%Y-%m-%d_%H-%M-%S').mp4"
 
-ffmpeg \
-    -f lavfi \
-    -i "color=size=1x1:rate=1" \
-    -f pulse \
-    -i default \
-    -f x11grab \
-    -video_size 1x1 \
-    -i :0 \
-    "$FILE"
+ARGS=(-g "$GEOMETRY" -f "$FILE")
+if (( AUDIO )); then
+    ARGS+=(--audio)
+fi
+
+notify-send "Screen recording" "Recording started — run screen-record again to stop"
+
+wf-recorder "${ARGS[@]}"
+
+# Unlike the screenshot scripts there is no point putting a video on the
+# clipboard, so copy the path instead.
+printf '%s' "$FILE" | wl-copy
+
+notify-send "Screen recording saved" "$FILE"
