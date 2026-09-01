@@ -31,13 +31,18 @@ installing it itself).
 
 ### The symlink convention
 
-Every module links its *directory* into place with `ln -vfs <repo dir> <target>`, so editing files
+Every module links its *directory* into place with `ln -vfsn <repo dir> <target>`, so editing files
 in this repo is immediately live — there is no copy/apply step. Two consequences:
 
 - Never replace a symlinked target with a real directory; that breaks the whole model.
-- `ln -s` into a path that already exists as a directory nests instead of replacing. That is how
-  `nvim/nvim -> /home/ezzedin/fedora/nvim` (a stray self-symlink) got created. If a rerun
-  produces `<module>/<module>`, delete it; it means the target was a real directory at the time.
+- The `-n` (`--no-dereference`) is load-bearing. Without it `ln` follows a target that is already
+  a symlink-to-directory and creates the link *inside* it, producing a nested `<module>/<module>`
+  self-symlink instead of replacing the link. That is how `nvim/nvim` got created. With `-n` a
+  rerun replaces the symlink, and a target that is a *real* directory fails loudly rather than
+  nesting silently.
+
+`wm/install.sh` runs its symlinks *before* its `dnf` calls, on purpose: linking depends on no
+package, and under `set -e` a failed install would otherwise skip every link.
 
 `fish/config.fish` puts `~/scripts` on `PATH`, so everything in `scripts/` is a global command.
 

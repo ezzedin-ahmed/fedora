@@ -4,4 +4,7 @@ set -Eeuo pipefail
 
 chsh -s $(which fish)
 
-ln -vfs $HOME/fedora/fish/ $HOME/.config/fish
+# -n (--no-dereference) matters: without it, a rerun where the target is
+# already a symlink-to-directory makes ln descend into it and create a
+# nested <module>/<module> link instead of replacing the symlink.
+ln -vfsn $HOME/fedora/fish/ $HOME/.config/fish
