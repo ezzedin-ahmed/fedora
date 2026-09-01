@@ -52,6 +52,7 @@ sudo dnf install -y \
   waybar \
   fuzzel \
   mako \
+  nautilus \
   wl-clipboard \
   grim \
   slurp \
