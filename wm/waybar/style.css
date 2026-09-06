@@ -60,6 +60,12 @@ tooltip label {
   color: @fg3;
 }
 
+/* Every workspace 1–10 is always listed (persistent-workspaces); the ones with
+   nothing on them sit back a shade so the occupied ones still stand out. */
+#workspaces button.empty {
+  color: @gray;
+}
+
 #workspaces button:hover {
   background: none;
   color: @fg1;
