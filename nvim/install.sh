@@ -2,7 +2,7 @@
 
 set -Eeou pipefail
 
-sudo dnf install neovim jetbrains-mono-fonts-all
+sudo dnf install -y neovim
 
 sudo dnf install -y \
   python3 \
@@ -17,10 +17,35 @@ sudo dnf install -y \
   golang
 
 if ! command -v rustup >/dev/null 2>&1; then
-  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile complete
 fi
 
 source "$HOME/.cargo/env"
+
+# A profile only applies to a toolchain rustup installs itself, so neither the
+# flag above nor `set profile` below retrofits an existing machine: the curl is
+# skipped wherever rustup is already present, and running
+# `rustup toolchain install stable --profile complete` over an *installed*
+# toolchain re-syncs the components it already has instead of adding the missing
+# ones. Naming them is the only thing that actually fills the gap. `set profile`
+# still earns its line -- it is what makes the *next* toolchain complete.
+#
+# rust-analyzer and rust-src are the two that matter here, and the two the
+# `default` profile leaves out. Their absence is quiet rather than loud: rustup
+# drops a ~/.cargo/bin/rust-analyzer shim whether or not the component is
+# installed, so rustaceanvim's executable check passes, the server is spawned,
+# and it exits immediately with "Unknown binary 'rust-analyzer' in official
+# toolchain" -- into lsp.log, with nothing shown in nvim. rust-src is what lets
+# it resolve std; without it stdlib completion and goto fail the same way.
+rustup set profile complete
+rustup component add \
+  rust-analyzer \
+  rust-src \
+  rust-analysis \
+  llvm-tools \
+  llvm-bitcode-linker \
+  rustc-dev \
+  rustc-docs
 
 if ! command -v uv >/dev/null 2>&1; then
   curl -LsSf https://astral.sh/uv/install.sh | sh
