@@ -1,0 +1,9 @@
+@import url("theme.css");
+
+/* caret-color needs GTK >= 3.20, which is why upstream splits the two files. */
+.input {
+    caret-color: @caret_color;
+}
+.selected.item-box {
+    border: none;
+}

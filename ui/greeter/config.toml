@@ -6,7 +6,7 @@ vt = 1
 # sway without a password prompt. Every login now goes through the greeter.
 #
 # Pinning sway to the Intel iGPU is handled by
-# /etc/modprobe.d/nvidia-ondemand.conf (wm/install.sh), which keeps the NVIDIA
+# /etc/modprobe.d/nvidia-ondemand.conf (nvidia/install.sh), which keeps the NVIDIA
 # modules unloaded at boot. With no nvidia DRM node present, /dev/dri holds
 # only the Intel card and wlroots cannot pick the wrong GPU -- a stronger
 # guarantee than an environment variable, and one that cannot break login. It

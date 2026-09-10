@@ -1,40 +1,41 @@
-/* gtklock — gruvbox dark, palette matches wm/waybar/style.css and
-   alacritty/colors.toml.
+/* gtklock — frosted light, palette matches ui/waybar/style.css and
+   ui/greeter/gtkgreet.css.
 
    GTK3 CSS (gtklock links libgtk-3). @define-color works; CSS custom
    properties do not. Widget names come from gtk_widget_set_name(), so they are
    addressed as #name. */
 
-@define-color bg0    #282828;
-@define-color bg1    #3c3836;
-@define-color bg2    #504945;
+@define-color bg0    #ffffff;
+@define-color bg1    #f5f5f7;
+@define-color bg2    #e8e8ed;
 
-@define-color fg0    #fbf1c7;
-@define-color fg1    #ebdbb2;
-@define-color fg3    #bdae93;
-@define-color fg4    #a89984;
+@define-color fg0    #000000;
+@define-color fg1    #1d1d1f;
+@define-color fg3    #4a4a4e;
+@define-color fg4    #66666b;
 
-@define-color red    #fb4934;
-@define-color yellow #fabd2f;
-@define-color blue   #83a598;
+@define-color red    #d70015;
+@define-color yellow #b25000;
+@define-color blue   #0071e3;
 
-/* The wallpaper, dimmed. GTK3 takes stacked background layers, so a flat
-   translucent gruvbox wash sits over the image — that keeps the clock and the
-   entry legible over a light patch without needing a separate blurred asset
-   (upstream swaylock has no blur, and swaylock-effects is not packaged). */
+/* The blurred wallpaper under a white wash. The blur is baked into the image
+   rather than done by the compositor: swayfx blurs windows and layer surfaces,
+   but a lock screen is an ext-session-lock surface with nothing behind it to
+   sample, so there is nothing there for it to blur. background-blurred.jpg is
+   generated from background.jpg by ui/install.sh with ffmpeg's gblur. */
 window {
   background-color: @bg0;
   background-image:
-    linear-gradient(rgba(40, 40, 40, 0.72), rgba(40, 40, 40, 0.72)),
-    /* Relative to THIS file's directory, which is why wm/sway/config passes
+    linear-gradient(rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0.55)),
+    /* Relative to THIS file's directory, which is why ui/sway/config passes
        -s as the repo path: GTK resolves url() against the directory it was
        given, symlinks not followed, so loading this via ~/.config/gtklock
        would look for ~/.config/wallpapers and quietly come up empty. */
-    url("../wallpapers/background.jpg");
+    url("../wallpapers/background-blurred.jpg");
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
-  font-family: "Hack Nerd Font", "HackNerdFont", "Noto Sans", sans-serif;
+  font-family: "Inter", "Hack Nerd Font", "Noto Sans Arabic", sans-serif;
   color: @fg1;
 }
 
@@ -48,20 +49,21 @@ window {
   font-size: 76px;
   font-weight: 300;
   letter-spacing: 2px;
-  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.12);
 }
 
 #date-label {
   color: @fg4;
   font-size: 17px;
   margin-top: 2px;
-  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.10);
 }
 
 /* The card holding the password form — the "clear place to type". */
 #window-box {
-  background-color: rgba(60, 56, 54, 0.92);
-  border: 1px solid @bg2;
+  background-color: rgba(255, 255, 255, 0.82);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.14);
   border-radius: 14px;
   padding: 26px 30px;
 }
@@ -78,9 +80,9 @@ window {
   min-width: 300px;
   min-height: 42px;
   padding: 0 14px;
-  background-color: @bg0;
+  background-color: @bg1;
   color: @fg0;
-  caret-color: @yellow;
+  caret-color: @blue;
   font-size: 16px;
   letter-spacing: 3px;
   border: 2px solid @bg2;
@@ -90,7 +92,7 @@ window {
 
 #input-field:focus {
   border-color: @blue;
-  background-color: #32302f;
+  background-color: #ffffff;
 }
 
 #input-field selection {
@@ -111,7 +113,7 @@ window {
 }
 
 #unlock-button:hover {
-  background-color: #5a524c;
+  background-color: #dcdce1;
   color: @fg0;
 }
 

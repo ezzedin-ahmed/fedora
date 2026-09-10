@@ -1,35 +1,43 @@
-/* Gruvbox dark, macOS-style menu bar — flat, monochrome, no per-module boxes.
-   Palette matches alacritty/colors.toml. */
+/* Frosted light, macOS-style menu bar — flat, monochrome, no per-module boxes.
+   The bar is translucent white and swayfx blurs the wallpaper behind it; see
+   the layer_effects line in ui/sway/config, without which this is just a
+   see-through bar.
 
-@define-color bg0    #282828;
-@define-color bg1    #3c3836;
-@define-color bg2    #504945;
+   The names are kept from the gruvbox palette this replaced so every selector
+   below still reads the same, but the roles are inverted: fg0 is the *strongest*
+   text, which in a light theme means the darkest, not the lightest. */
 
-@define-color fg0    #fbf1c7;
-@define-color fg1    #ebdbb2;
-@define-color fg3    #bdae93;
-@define-color fg4    #a89984;
-@define-color gray   #928374;
+@define-color bg0    #ffffff;
+@define-color bg1    #f5f5f7;
+@define-color bg2    #e8e8ed;
 
-@define-color red    #fb4934;
-@define-color yellow #fabd2f;
-@define-color blue   #83a598;
-@define-color aqua   #8ec07c;
+@define-color fg0    #000000;
+@define-color fg1    #1d1d1f;
+@define-color fg3    #4a4a4e;
+@define-color fg4    #66666b;
+@define-color gray   #7c7c82;
+
+@define-color red    #d70015;
+@define-color yellow #b25000;
+@define-color blue   #0071e3;
+@define-color aqua   #1d7a3f;
 
 * {
   border: none;
   border-radius: 0;
   min-height: 0;
-  font-family: "Hack Nerd Font", "HackNerdFont", "Noto Sans", sans-serif;
-  font-size: 16px;
+  font-family: "Inter", "Hack Nerd Font", "Noto Sans Arabic", sans-serif;
+  font-size: 15px;
 }
 
 window#waybar {
-  background-color: transparent;
+  /* Translucent rather than transparent: swayfx blurs whatever this surface
+     covers, so the alpha here is what the frosted effect is made of. Fully
+     transparent would leave nothing to blur into and the bar would read as
+     floating text again. */
+  background-color: rgba(255, 255, 255, 0.72);
   color: @fg1;
-  /* Nothing sits behind the bar now, so lean on a text shadow to keep the
-     labels legible over a light patch of wallpaper. */
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
 }
 
 window#waybar.hidden {
@@ -47,7 +55,7 @@ tooltip label {
   padding: 4px;
 }
 
-/* Workspaces — flat, no boxes; the active one just brightens. */
+/* Workspaces — flat, no boxes; the active one just darkens. */
 
 #workspaces {
   margin-left: 4px;

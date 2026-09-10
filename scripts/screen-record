@@ -8,7 +8,7 @@ set -Eeuo pipefail
 #   screen-record -a     record a region, with audio from the default source
 #
 # Run it again while a recording is active to stop it. wf-recorder writes h264
-# via libx264, which comes from RPM Fusion's ffmpeg (wm/install.sh swaps the
+# via libx264, which comes from RPM Fusion's ffmpeg (ui/install.sh swaps the
 # stripped ffmpeg-free out for it).
 
 DIR="$HOME/Videos/Recordings"

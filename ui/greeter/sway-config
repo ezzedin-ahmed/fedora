@@ -1,10 +1,10 @@
 # Sway config for the greeter session only. Nothing here is the user's sway
-# config (wm/sway/config) — this compositor runs as the greetd user, exists
+# config (ui/sway/config) — this compositor runs as the greetd user, exists
 # to host one gtkgreet window, and exits the moment a login succeeds.
 #
 # gtkgreet is not a standalone program: it is a Wayland client and needs a
 # compositor to run in. cage would also do, but sway is already installed by
-# wm/, supports wlr-layer-shell (which gtkgreet needs for --layer-shell, i.e.
+# ui/, supports wlr-layer-shell (which gtkgreet needs for --layer-shell, i.e.
 # a window on *every* output), and honours the same input directives as the
 # real session, so the keyboard behaves at the password prompt exactly as it
 # does inside sway.
@@ -22,12 +22,12 @@
 xwayland disable
 
 # Same wallpaper as the desktop and the lock screen. gtkgreet paints its own
-# dimmed copy over this (see greeter/gtkgreet.css), so this only covers the
+# dimmed copy over this (see ui/greeter/gtkgreet.css), so this only covers the
 # moment between sway coming up and gtkgreet mapping its window — without it
 # that gap is a black flash.
 output * bg /etc/greetd/background.jpg fill
 
-# Mirrors wm/sway/config, so a password typed here goes through the same
+# Mirrors ui/sway/config, so a password typed here goes through the same
 # layout and the same Caps/Escape swap as one typed in the session.
 input type:keyboard {
     xkb_layout "us,ara"
@@ -49,7 +49,7 @@ bindsym Mod4+Shift+e exec swaynag \
     -b 'Reboot' 'systemctl reboot'
 
 # Blank the outputs if the machine is left sitting at the greeter. Guarded
-# because swayidle is a wm/ dependency, not a greeter/ one.
+# because swayidle is a ui/ dependency, not a greeter/ one.
 exec command -v swayidle >/dev/null && swayidle -w \
     timeout 300 'swaymsg "output * power off"' \
          resume 'swaymsg "output * power on"'
@@ -63,7 +63,7 @@ exec command -v swayidle >/dev/null && swayidle -w \
 #                   gtkgreet(1)); Adwaita's dark variant is what makes the
 #                   entry, selection and caret colours sane before the CSS
 #                   touches anything, the same job gtk-theme=Adwaita-dark
-#                   does in wm/gtklock/config.ini
+#                   does in ui/gtklock/config.ini
 #
 # `swaymsg exit` is load-bearing: greetd starts the *compositor*, so sway has
 # to terminate once gtkgreet has finalised a login, or the greeter session

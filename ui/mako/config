@@ -1,0 +1,11 @@
+font=Inter 11
+# Translucent white: the notifications layer is blurred by swayfx (see the
+# layer_effects line in ui/sway/config), so this alpha is what frosts it.
+background-color=#ffffffa6
+text-color=#1d1d1f
+border-color=#0000001a
+border-size=1
+border-radius=10
+padding=10
+margin=8
+default-timeout=5000

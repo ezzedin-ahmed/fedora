@@ -7,7 +7,7 @@
 set $mod Mod4
 
 set $terminal alacritty
-set $launcher fuzzel
+set $launcher ulauncher-toggle
 set $filemanager nautilus
 
 set $menu $launcher
@@ -139,6 +139,10 @@ bindsym $mod+Shift+0 move container to workspace number $ws10
 bindsym $mod+Shift+minus move scratchpad
 bindsym $mod+minus scratchpad show
 
+# Dropdown terminal. First press spawns it and the for_window rule below floats
+# it and drops it into the scratchpad; every press after that toggles it.
+bindsym $mod+grave exec scratchterm
+
 ### Layout
 
 bindsym $mod+s layout stacking
@@ -197,17 +201,17 @@ bindsym XF86MonBrightnessDown exec brightnessctl set 5%-
 # gtklock is an ext-session-lock client, so the compositor owns the lock and a
 # crashed locker cannot fall through to the desktop.
 #
-# The stylesheet is passed here rather than set in wm/gtklock/config.ini,
+# The stylesheet is passed here rather than set in ui/gtklock/config.ini,
 # because that file is a glib key file with no variable expansion and would
 # have to name an absolute path. `exec` hands this to sh(1), so $HOME expands.
-# waybar's lock button (wm/waybar/config) repeats the same command.
+# waybar's lock button (ui/waybar/config) repeats the same command.
 #
 # It must be the repo path, NOT ~/.config/gtklock/style.css. style.css reaches
 # the wallpaper as url("../wallpapers/..."), and GTK resolves that against the
 # directory of the path it was handed without following symlinks -- so via
 # ~/.config/gtklock it would look in ~/.config/wallpapers and silently find
 # nothing.
-set $lock gtklock -d -s $HOME/fedora/wm/gtklock/style.css
+set $lock gtklock -d -s $HOME/fedora/ui/gtklock/style.css
 
 bindsym $mod+Escape exec $lock
 
@@ -251,7 +255,7 @@ default_floating_border none
 # Wallpaper lives in the repo so it survives ~/Downloads being cleared.
 # sway runs `output bg` paths through wordexp(3), so $HOME expands here and
 # the config carries no username.
-output * bg $HOME/fedora/wm/wallpapers/background.jpg fill
+output * bg $HOME/fedora/ui/wallpapers/background.jpg fill
 
 ### Gaps
 
@@ -264,12 +268,54 @@ seat seat0 xcursor_theme Adwaita 24
 
 ### Colors
 
-# Only tab/stack labels use these now that borders are off. Gruvbox, no blue.
+# Only tab/stack labels use these now that borders are off. Frosted light, and
+# the palette every stylesheet under ui/ repeats: near-black text on white, one
+# blue accent, one red for urgent.
 #                       border  background text    indicator child_border
-client.focused          #504945 #3c3836    #ebdbb2 #504945   #3c3836
-client.focused_inactive #3c3836 #282828    #a89984 #3c3836   #282828
-client.unfocused        #3c3836 #282828    #928374 #3c3836   #282828
-client.urgent           #cc241d #cc241d    #fbf1c7 #cc241d   #cc241d
+client.focused          #d0d0d4 #ffffff    #1d1d1f #0071e3   #ffffff
+client.focused_inactive #e4e4e7 #f5f5f7    #6e6e73 #e4e4e7   #f5f5f7
+client.unfocused        #e4e4e7 #f5f5f7    #8e8e93 #e4e4e7   #f5f5f7
+client.urgent           #d70015 #d70015    #ffffff #d70015   #d70015
+
+### SwayFX effects
+
+# Stock sway has none of this -- wlroots implements no blur, so these are
+# swayfx-only directives and plain sway would abort on them as unknown
+# commands. ui/install.sh is what makes sure the running compositor is swayfx.
+corner_radius 10
+smart_corner_radius enable
+
+blur enable
+blur_passes 3
+blur_radius 4
+# A little noise stops the large flat blurred areas from banding, and a nudge
+# to brightness/saturation keeps a white theme from going grey once it is
+# averaging the wallpaper underneath.
+blur_noise 0.02
+blur_brightness 1.05
+blur_saturation 1.1
+# blur_xray off: blur samples the wallpaper only, not the windows underneath.
+# With it on, a floating window would show a smeared copy of whatever it
+# overlaps, which reads as a rendering fault rather than as glass.
+blur_xray disable
+
+shadows enable
+shadow_blur_radius 20
+shadow_color #00000026
+
+# Layer surfaces are not windows and are not covered by the rules above; each
+# namespace has to opt in by name. waybar's is "waybar", mako's "notifications".
+# blur_ignore_transparent is what keeps the bar's own translucency from being
+# blurred a second time on top of the wallpaper blur.
+layer_effects "waybar" blur enable; blur_ignore_transparent enable; shadows enable; corner_radius 10
+layer_effects "notifications" blur enable; shadows enable; corner_radius 10
+
+# Blur only shows through something translucent, so opaque windows would render
+# the whole section above invisible. These two are the ones worth seeing it on;
+# everything else stays fully opaque on purpose, since text over a busy
+# wallpaper is harder to read, not prettier.
+for_window [app_id="Alacritty"] opacity 0.94
+for_window [app_id="scratchterm"] opacity 0.92
 
 ### Floating applications
 
@@ -278,6 +324,18 @@ for_window [app_id="blueman-manager"] floating enable
 
 # Wifi picker launched from waybar's network icon.
 for_window [app_id="nmtui"] floating enable, resize set 760 520
+
+# Dropdown terminal spawned by scripts/scratchterm ($mod+`). The trailing
+# `scratchpad show` is what makes the first press feel like every other one:
+# without it the window would be filed away invisibly and need a second press.
+for_window [app_id="scratchterm"] floating enable, resize set 60 ppt 55 ppt, move scratchpad, scratchpad show
+
+# ulauncher. Fedora's unit starts it with GDK_BACKEND=x11, so it arrives as an
+# XWayland window and matches on class, not app_id -- both are listed so the
+# rule survives the packager dropping that pin. Sway would otherwise tile the
+# launcher into the layout instead of floating it over the workspace.
+for_window [class="Ulauncher"] floating enable
+for_window [app_id="ulauncher"] floating enable
 
 ### Include local configuration if present
 

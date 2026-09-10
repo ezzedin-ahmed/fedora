@@ -1,5 +1,5 @@
 /* gtkgreet — gruvbox dark, deliberately the same palette and card shape as
-   wm/gtklock/style.css so the login screen and the lock screen read as one
+   ui/gtklock/style.css so the login screen and the lock screen read as one
    thing. gtklock is literally a fork of gtkgreet ("Lock screen based on
    gtkgreet" is the Fedora package summary), so the widget trees are close,
    but the names differ — do not assume a selector that works in one works in
@@ -30,18 +30,18 @@
    the greetd user and this user's home is 0700, so nothing under this repo is
    readable to it. Same reason the wallpaper is copied to /etc/greetd. */
 
-@define-color bg0    #282828;
-@define-color bg1    #3c3836;
-@define-color bg2    #504945;
+@define-color bg0    #ffffff;
+@define-color bg1    #f5f5f7;
+@define-color bg2    #e8e8ed;
 
-@define-color fg0    #fbf1c7;
-@define-color fg1    #ebdbb2;
-@define-color fg3    #bdae93;
-@define-color fg4    #a89984;
+@define-color fg0    #000000;
+@define-color fg1    #1d1d1f;
+@define-color fg3    #4a4a4e;
+@define-color fg4    #66666b;
 
-@define-color red    #fb4934;
-@define-color yellow #fabd2f;
-@define-color blue   #83a598;
+@define-color red    #d70015;
+@define-color yellow #b25000;
+@define-color blue   #0071e3;
 
 /* The wallpaper, dimmed — the flat translucent wash from gtklock, for the
    same reason: it keeps the clock and the entry legible over a light patch
@@ -56,12 +56,15 @@
 window, window.background {
   background-color: @bg0;
   background-image:
-    linear-gradient(rgba(40, 40, 40, 0.72), rgba(40, 40, 40, 0.72)),
+    linear-gradient(rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0.55)),
+    /* Pre-blurred by ui/install.sh, for the same reason gtklock uses one: the
+       greeter has nothing behind it for swayfx to sample, so compositor blur
+       has no effect here and the blur has to be in the image. */
     url("/etc/greetd/background.jpg");
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
-  font-family: "Hack Nerd Font", "HackNerdFont", "Noto Sans", sans-serif;
+  font-family: "Inter", "Hack Nerd Font", "Noto Sans Arabic", sans-serif;
   color: @fg1;
 }
 
@@ -70,15 +73,16 @@ window, window.background {
   color: @fg0;
   font-weight: 300;
   letter-spacing: 2px;
-  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.12);
   margin-bottom: 18px;
 }
 
 /* The card. gtkgreet gives #body a 384px width request in code, so CSS can
    pad it but cannot make it narrower than that. */
 #body {
-  background-color: rgba(60, 56, 54, 0.92);
-  border: 1px solid @bg2;
+  background-color: rgba(255, 255, 255, 0.82);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.14);
   border-radius: 14px;
   padding: 26px 30px;
 }
@@ -109,8 +113,8 @@ window, window.background {
   padding: 0 14px;
   background-color: @bg0;
   color: @fg0;
-  caret-color: @yellow;
-  font-family: "Hack Nerd Font", "HackNerdFont", "Noto Sans", sans-serif;
+  caret-color: @blue;
+  font-family: "Inter", "Hack Nerd Font", "Noto Sans Arabic", sans-serif;
   font-size: 16px;
   letter-spacing: 1px;
   border: 2px solid @bg2;
@@ -120,7 +124,7 @@ window, window.background {
 
 #input-field:focus {
   border-color: @blue;
-  background-color: #32302f;
+  background-color: #ffffff;
 }
 
 #input-field selection {
@@ -136,7 +140,7 @@ window, window.background {
   padding: 0 12px;
   background-color: @bg0;
   color: @fg1;
-  font-family: "Hack Nerd Font", "HackNerdFont", "Noto Sans", sans-serif;
+  font-family: "Inter", "Hack Nerd Font", "Noto Sans Arabic", sans-serif;
   font-size: 14px;
   letter-spacing: 0;
   border: 1px solid @bg2;
@@ -160,7 +164,7 @@ window, window.background {
 #body button,
 #body button label {
   color: @fg1;
-  font-family: "Hack Nerd Font", "HackNerdFont", "Noto Sans", sans-serif;
+  font-family: "Inter", "Hack Nerd Font", "Noto Sans Arabic", sans-serif;
   font-size: 14px;
 }
 
@@ -180,7 +184,7 @@ window, window.background {
 }
 
 #body button:hover {
-  background-color: #5a524c;
+  background-color: #dcdce1;
 }
 
 /* "Log in" carries GTK's .suggested-action. The `label` half of each of these
@@ -198,5 +202,5 @@ window, window.background {
 }
 
 #body button.suggested-action:hover {
-  background-color: #93b5a8;
+  background-color: #3392ff;
 }
