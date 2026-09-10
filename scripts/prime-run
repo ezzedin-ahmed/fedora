@@ -2,22 +2,20 @@
 #
 # Run one command on the discrete NVIDIA GPU (PRIME render offload).
 #
-# Sway is pinned to the Intel iGPU by absence: the NVIDIA modules are
-# blacklisted at boot (/etc/modprobe.d/nvidia-ondemand.conf, from
-# wm/install.sh), so no nvidia DRM node exists for wlroots to pick and nothing
-# touches the Quadro unless it is asked to. This is the asking:
-#
 #   prime-run glxinfo -B          # should print the Quadro, not HD Graphics
 #   prime-run vkcube
 #   prime-run blender
 #
-# Offload is client-side, so it works fine with the compositor on Intel: the
-# app renders on the dGPU and hands the result over as a dma-buf. It needs
-# nvidia_drm.modeset=1, which the Fedora akmod sets by default.
+# This is for RENDERING only -- OpenGL and Vulkan, i.e. anything drawing pixels
+# it will display. Both GPUs are candidates for those APIs and the loader picks
+# by display connection, which on this laptop is always Intel; the variables
+# below are what override that per API.
 #
-# This is for GRAPHICS only. CUDA compute -- notebooks, torch, tensorflow,
-# anything on libcuda.so -- addresses the card directly and needs none of
-# this; run it plain.
+# CUDA and OpenCL compute need none of it: the iGPU is not a CUDA device at all,
+# so there is no wrong choice to make, and the setuid nvidia-modprobe helper
+# loads the driver on first open. Run a notebook plain.
+#
+# Either way `gpu-down` is what powers the card back down afterwards.
 
 set -Eeuo pipefail
 
@@ -26,17 +24,59 @@ if [ $# -eq 0 ]; then
   exit 2
 fi
 
+NVIDIA_EGL_ICD=/usr/share/glvnd/egl_vendor.d/10_nvidia.json
+
+# Fail loudly if the driver is not installed. Every failure mode in this script
+# is otherwise silent -- the app just renders on Intel and looks fine -- so the
+# one thing worth spending an error on is saying nothing is there to offload to.
+if [ ! -e "$NVIDIA_EGL_ICD" ]; then
+  echo "prime-run: no NVIDIA EGL ICD at $NVIDIA_EGL_ICD" >&2
+  echo "           the driver is not installed; run nvidia/install.sh" >&2
+  exit 1
+fi
+
+# Offload runs through the nvidia DRM node, which needs nvidia_drm loaded *with
+# modeset=1*. Nothing else here arranges that: the modules are blacklisted from
+# boot autoload (nvidia/nvidia-ondemand.conf), and nvidia-modprobe -- the helper
+# a CUDA process trips -- brings up nvidia and nvidia_uvm but never nvidia_drm.
+#
+# Checking that the parameter reads Y, not merely that the file exists: modeset
+# is set at load time and cannot be changed on a live module, so nvidia_drm
+# loaded by something else without it is the case that matters. Testing only for
+# the module leaves exactly the silent-Intel-fallback this guard is here to stop.
+modeset=$(cat /sys/module/nvidia_drm/parameters/modeset 2>/dev/null || echo missing)
+
+case "$modeset" in
+Y) ;;
+missing)
+  echo "prime-run: loading nvidia_drm (needed for offload)..." >&2
+  sudo modprobe nvidia_drm modeset=1
+  ;;
+*)
+  # Loaded without modeset. The only fix is a reload, which fails if anything
+  # is using it -- so say what is wrong rather than rendering on Intel quietly.
+  echo "prime-run: nvidia_drm is loaded with modeset=$modeset; reloading..." >&2
+  if ! sudo modprobe -r nvidia_drm 2>/dev/null; then
+    echo "prime-run: cannot unload nvidia_drm (in use). Offload will NOT work." >&2
+    echo "           close whatever is using the GPU, then rerun." >&2
+    exit 1
+  fi
+  sudo modprobe nvidia_drm modeset=1
+  ;;
+esac
+
 # __NV_PRIME_RENDER_OFFLOAD is the switch that actually moves rendering to the
 # dGPU. The other three tell each API which vendor to load, because on a glvnd
 # system both drivers are always present:
 #   - GLX (Xwayland clients) selects a vendor by name.
 #   - EGL (native Wayland clients) has no name knob, so the vendor library
-#     search list is narrowed to nvidia's ICD instead.
+#     search list is narrowed to nvidia's ICD instead. This is the one that
+#     matters most under sway, and the one a stock prime-run leaves out.
 #   - Vulkan enumerates every ICD regardless; NVIDIA_only promotes the Quadro
 #     to device 0, which is what apps that just take the first device pick.
 export __NV_PRIME_RENDER_OFFLOAD=1
 export __GLX_VENDOR_LIBRARY_NAME=nvidia
-export __EGL_VENDOR_LIBRARY_FILENAMES=/usr/share/glvnd/egl_vendor.d/10_nvidia.json
+export __EGL_VENDOR_LIBRARY_FILENAMES="$NVIDIA_EGL_ICD"
 export __VK_LAYER_NV_optimus=NVIDIA_only
 
 exec "$@"

@@ -99,15 +99,26 @@ fi
 
 sudo dnf install -y "${want[@]}" libva-nvidia-driver "$kdevel"
 
-# The kernel args from the package are not always enough: if nouveau binds the
-# GPU first, the nvidia module loads and then bails with "already bound to
-# nouveau". Blacklist it explicitly and rebuild the initramfs afterwards.
-sudo tee /etc/modprobe.d/blacklist-nouveau.conf >/dev/null <<'CONF'
+# nouveau has to be kept off the card, or it binds first and the nvidia module
+# then bails with "already bound to nouveau". The driver packages already do
+# this by adding kernel args at install time, and theirs are *better* than a
+# hand-written modprobe.d file: they also cover nova_core, the Rust nouveau
+# replacement Fedora ships, which a file saying only "blacklist nouveau" misses.
+#
+# So only write one -- and pay for the initramfs rebuild -- where the kargs are
+# actually absent. On this machine they are not, and this whole block is a
+# no-op that saves a 30-60s dracut run on every rerun.
+if grep -q 'modprobe.blacklist=.*nouveau' /proc/cmdline; then
+  echo "nouveau already blacklisted on the kernel cmdline; nothing to write."
+else
+  echo "No nouveau karg found; writing a modprobe.d blacklist instead."
+  sudo tee /etc/modprobe.d/blacklist-nouveau.conf >/dev/null <<'CONF'
 blacklist nouveau
+blacklist nova_core
 options nouveau modeset=0
 CONF
-
-sudo dracut --force
+  sudo dracut --force
+fi
 
 # akmods normally runs from a dnf trigger, but it is asynchronous; force it so a
 # failure surfaces here rather than as a black screen after reboot. Scope it to
@@ -115,7 +126,7 @@ sudo dracut --force
 echo "Building the kernel module (this takes a few minutes)..."
 sudo akmods --force --kernels "$(uname -r)"
 
-# ------------------------------------------------------- load it, no reboot
+# --------------------------------------------------------- verify, no reboot
 
 # Tear down whatever is loaded from the old branch first. If something still
 # holds the module we cannot swap it live and a reboot is the only option --
@@ -133,6 +144,9 @@ if lsmod | grep -qE '^nvidia'; then
   exit 0
 fi
 
+# Load it once, here, purely to prove the akmod build is good -- a broken
+# module should surface now rather than as a black screen or a dead nvidia-smi
+# days later. It gets unloaded again at the end of this script.
 echo "Loading the module..."
 if ! sudo modprobe nvidia; then
   echo "error: modprobe nvidia failed. Check 'sudo akmods --force' output." >&2
@@ -149,16 +163,73 @@ else
   echo "         Check 'journalctl -k | grep NVRM' for the probe error." >&2
 fi
 
+# ------------------------------------------------------------- power policy
+
+# The Quadro cannot runtime-suspend on this hardware: no ACPI _PR3 on the PCIe
+# root port, and Maxwell has no video-memory-off. So a loaded driver pins the
+# card at D0 for the whole session whether or not anything is using it, and
+# unbinding is the only lever. Keeping the modules off at boot is what lets it
+# come up in D3hot; see nvidia-ondemand.conf for the full reasoning.
+#
+# This lives here rather than in ui/ because it is driver policy, not desktop
+# config -- and installing a blacklist for a driver that module never installs
+# only made the ordering between the two matter.
+sudo install -Dm644 "$HOME/fedora/nvidia/nvidia-ondemand.conf" \
+  /etc/modprobe.d/nvidia-ondemand.conf
+
+# Let prime-run load nvidia_drm without a password prompt.
+#
+# nvidia_drm must be loaded with modeset=1 for PRIME render offload, and it is
+# the one module the setuid nvidia-modprobe helper cannot load -- it handles
+# nvidia, nvidia_uvm and nvidia_modeset, but has no drm option. Without this
+# rule prime-run only works when typed into an interactive shell: launched from
+# a .desktop entry or a sway keybinding there is no terminal for sudo to prompt
+# in, so the load fails and the app silently renders on the Intel GPU instead.
+#
+# Scoped to one exact argv with no wildcards, so it cannot be used to insert an
+# arbitrary module. Validated before install because a syntactically broken file
+# in sudoers.d breaks sudo entirely -- visudo -c on a temp copy first, and only
+# then move it into place.
+sudoers_tmp=$(mktemp)
+cat >"$sudoers_tmp" <<'SUDOERS'
+# Installed by nvidia/install.sh. Lets scripts/prime-run load nvidia_drm with
+# modeset=1 from a non-interactive context (.desktop entry, sway keybinding),
+# where sudo has no terminal to prompt in. One fixed argv, no wildcards.
+%wheel ALL=(root) NOPASSWD: /usr/bin/modprobe nvidia_drm modeset=1
+SUDOERS
+
+if sudo visudo -cf "$sudoers_tmp" >/dev/null; then
+  sudo install -Dm440 "$sudoers_tmp" /etc/sudoers.d/nvidia-drm
+  echo "sudoers rule installed: prime-run can load nvidia_drm without a prompt"
+else
+  echo "error: generated sudoers file failed validation; not installing it" >&2
+fi
+rm -f "$sudoers_tmp"
+
+# nvidia-powerd drives Dynamic Boost, which this GPU reports as "Not
+# Supported"; leaving it enabled only reloads the modules at every boot and
+# undoes the blacklist above.
+if systemctl is-enabled nvidia-powerd.service >/dev/null 2>&1; then
+  sudo systemctl disable --now nvidia-powerd.service
+fi
+
+# The blacklist only governs the *next* boot, so drop the driver now as well
+# and the card reaches D3hot without one. Best-effort: a live CUDA process
+# makes modprobe -r fail with EBUSY, which must not abort the script under
+# `set -e`. gpu-down names whatever is holding it.
+"$HOME/fedora/scripts/gpu-down" ||
+  echo "warning: driver still loaded; it will stay unloaded from the next boot" >&2
+
 cat <<'NOTES'
 
-This is a hybrid-graphics (Optimus) machine, so sway keeps rendering on the
-Intel GPU. Nothing uses the NVIDIA card until you offload to it explicitly:
+Hybrid-graphics (Optimus) machine, so sway keeps rendering on the Intel GPU and
+the card above is now unbound and back in D3hot. Two ways to use it:
 
-    __NV_PRIME_RENDER_OFFLOAD=1 __GLX_VENDOR_LIBRARY_NAME=nvidia <command>
+    <command>              CUDA/compute -- talks to the card directly, and the
+                           setuid nvidia-modprobe helper loads the driver for it
+    prime-run <command>    graphics -- PRIME render offload
 
-If sway fails to start after a later reboot, pin the compositor to the Intel
-node:
-
-    WLR_DRM_DEVICES=/dev/dri/card0 sway
+Neither ever powers the card back down, because nothing on this hardware can.
+Run `gpu-down` when you are finished with it.
 
 NOTES

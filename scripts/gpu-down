@@ -1,42 +1,51 @@
 #!/usr/bin/env bash
-# gpu-down — unload the NVIDIA driver so the Quadro drops to D3hot.
+# gpu-down — unload the NVIDIA driver so the Quadro drops back to D3hot.
 #
-# This is the only way to power the card down on this machine. Maxwell on
-# Skylake has no runtime-D3 support (no _PR3 power resource on the root port,
-# no video-memory-off in hardware), so a loaded driver pins the GPU at D0
-# whether or not anything is using it.
+# This is the only manual step the discrete GPU needs, and the only one it has:
+# the card cannot power itself down (see nvidia/ for the hardware reason), and
+# anything that wants it -- a CUDA process via the nvidia-modprobe helper, or
+# prime-run -- brings the driver up on its own. Nothing brings it back, so
+# without this the card sits at D0 for the rest of the session.
 
 set -Eeuo pipefail
 
-DEV=0000:01:00.0
+# The Quadro has no display attached, so it shows up under either PCI class
+# depending on the machine. Derived rather than hardcoded, so this survives the
+# card moving on the bus.
+dev=$(lspci -D -d 10de: | grep -E 'VGA compatible controller|3D controller' |
+  head -1 | cut -d' ' -f1)
+if [ -z "$dev" ]; then
+  echo "gpu-down: no NVIDIA GPU on the PCI bus" >&2
+  exit 1
+fi
+
+state() { cat "/sys/bus/pci/devices/$dev/power_state"; }
 
 if ! lsmod | grep -q '^nvidia '; then
-  echo "NVIDIA driver already unloaded."
-  echo "PCI power state: $(cat /sys/bus/pci/devices/$DEV/power_state)"
+  echo "NVIDIA driver already unloaded. PCI power state: $(state)"
   exit 0
 fi
 
 # Anything still holding the device keeps modprobe -r from succeeding, and the
 # error alone does not say who. Name them first.
-if procs="$(nvidia-smi --query-compute-apps=pid,process_name --format=csv,noheader 2>/dev/null)" &&
-   [ -n "$procs" ]; then
+if procs=$(nvidia-smi --query-compute-apps=pid,process_name --format=csv,noheader 2>/dev/null) &&
+  [ -n "$procs" ]; then
   echo "Still using the GPU:" >&2
   echo "$procs" >&2
   echo "Close these first, or the unload will fail." >&2
 fi
 
 echo "Unloading NVIDIA modules..."
-# Ordered leaves-first; modprobe -r would work out the order itself, but naming
+# Ordered leaves-first; modprobe -r would work the order out itself, but naming
 # them makes a stuck module obvious in the error.
 sudo modprobe -r nvidia_drm nvidia_modeset nvidia_uvm nvidia
 
-# The PCI device only autosuspends once nothing is bound to it, and udev's
+# The device only autosuspends once nothing is bound to it, and udev's
 # 80-nvidia-pm.rules flips power/control back to "on" at unbind -- which would
 # pin it at D0 forever. Put it back to auto so it can actually drop.
-echo auto | sudo tee /sys/bus/pci/devices/$DEV/power/control >/dev/null
+echo auto | sudo tee "/sys/bus/pci/devices/$dev/power/control" >/dev/null
 
-state="$(cat /sys/bus/pci/devices/$DEV/power_state)"
-echo "PCI power state: $state"
-if [ "$state" = D0 ]; then
+echo "PCI power state: $(state)"
+[ "$(state)" = D0 ] &&
   echo "Warning: still D0; something may have reloaded the driver." >&2
-fi
+exit 0
