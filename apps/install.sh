@@ -11,7 +11,7 @@ set -Eeuo pipefail
 # it. Each app is its own dnf transaction for the same reason: one unavailable
 # package should not take the rest of the list down.
 
-apps=(waterfox discord telegram vlc obs-studio nautilus obsidian)
+apps=(waterfox discord telegram vlc obs-studio obsidian)
 
 install_waterfox() {
   # The OBS repo is the browser's own Fedora channel (isv:BrowserWorks is
@@ -160,10 +160,6 @@ DESKTOP
   echo "installed to ${bin#"$HOME"/}"
 }
 
-# nautilus is also installed by ui/install.sh, because sway's $filemanager
-# binding needs a file manager whether or not this module is ever run. Listing
-# it here too keeps this module self-contained; dnf makes the repeat a no-op.
-install_nautilus()   { sudo dnf install -y nautilus; }
 
 main() {
   local selected=("$@")

@@ -5,8 +5,12 @@ set -Eeuo pipefail
 # which Apple licenses only for its own platforms. It has no Arabic, so Noto
 # Sans Arabic carries that half -- see fontconfig/fonts.conf for how the two are
 # paired. Hack Nerd Font is vendored in this directory rather than packaged,
-# for the icon glyphs waybar, tmux and Neovim draw.
-for pkg in rsms-inter-fonts google-noto-sans-arabic-fonts google-noto-color-emoji-fonts; do
+# for the icon glyphs tmux and Neovim draw.
+# google-noto-fonts-all is the sans/serif fallback everything lands on for
+# scripts none of the three faces below cover, and it is what makes the serif
+# generic resolve to Noto Serif. It used to come in with the desktop module.
+for pkg in rsms-inter-fonts google-noto-sans-arabic-fonts google-noto-color-emoji-fonts \
+           google-noto-fonts-all; do
   rpm -q "$pkg" >/dev/null 2>&1 || sudo dnf install -y "$pkg"
 done
 

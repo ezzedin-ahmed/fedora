@@ -71,7 +71,7 @@ esac
 #   - GLX (Xwayland clients) selects a vendor by name.
 #   - EGL (native Wayland clients) has no name knob, so the vendor library
 #     search list is narrowed to nvidia's ICD instead. This is the one that
-#     matters most under sway, and the one a stock prime-run leaves out.
+#     matters most under a Wayland compositor, and the one a stock prime-run omits.
 #   - Vulkan enumerates every ICD regardless; NVIDIA_only promotes the Quadro
 #     to device 0, which is what apps that just take the first device pick.
 export __NV_PRIME_RENDER_OFFLOAD=1

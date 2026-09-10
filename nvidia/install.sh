@@ -2,7 +2,7 @@
 #
 # NVIDIA proprietary driver for the discrete GPU on this Optimus laptop.
 #
-# The Intel iGPU keeps driving the sway session; the NVIDIA card is only used
+# The Intel iGPU keeps driving the COSMIC session; the NVIDIA card is only used
 # by applications explicitly offloaded to it (see the notes printed at the end).
 # Requires the RPM Fusion nonfree repo, which base/install.sh sets up.
 #
@@ -171,9 +171,9 @@ fi
 # unbinding is the only lever. Keeping the modules off at boot is what lets it
 # come up in D3hot; see nvidia-ondemand.conf for the full reasoning.
 #
-# This lives here rather than in ui/ because it is driver policy, not desktop
-# config -- and installing a blacklist for a driver that module never installs
-# only made the ordering between the two matter.
+# This lives here rather than in the desktop module because it is driver policy,
+# not desktop config -- and installing a blacklist for a driver that module never
+# installs only made the ordering between the two matter.
 sudo install -Dm644 "$HOME/fedora/nvidia/nvidia-ondemand.conf" \
   /etc/modprobe.d/nvidia-ondemand.conf
 
@@ -183,7 +183,7 @@ sudo install -Dm644 "$HOME/fedora/nvidia/nvidia-ondemand.conf" \
 # the one module the setuid nvidia-modprobe helper cannot load -- it handles
 # nvidia, nvidia_uvm and nvidia_modeset, but has no drm option. Without this
 # rule prime-run only works when typed into an interactive shell: launched from
-# a .desktop entry or a sway keybinding there is no terminal for sudo to prompt
+# a .desktop entry or a COSMIC shortcut there is no terminal for sudo to prompt
 # in, so the load fails and the app silently renders on the Intel GPU instead.
 #
 # Scoped to one exact argv with no wildcards, so it cannot be used to insert an
@@ -193,7 +193,7 @@ sudo install -Dm644 "$HOME/fedora/nvidia/nvidia-ondemand.conf" \
 sudoers_tmp=$(mktemp)
 cat >"$sudoers_tmp" <<'SUDOERS'
 # Installed by nvidia/install.sh. Lets scripts/prime-run load nvidia_drm with
-# modeset=1 from a non-interactive context (.desktop entry, sway keybinding),
+# modeset=1 from a non-interactive context (.desktop entry, COSMIC shortcut),
 # where sudo has no terminal to prompt in. One fixed argv, no wildcards.
 %wheel ALL=(root) NOPASSWD: /usr/bin/modprobe nvidia_drm modeset=1
 SUDOERS
@@ -222,7 +222,7 @@ fi
 
 cat <<'NOTES'
 
-Hybrid-graphics (Optimus) machine, so sway keeps rendering on the Intel GPU and
+Hybrid-graphics (Optimus) machine, so COSMIC keeps rendering on the Intel GPU and
 the card above is now unbound and back in D3hot. Two ways to use it:
 
     <command>              CUDA/compute -- talks to the card directly, and the

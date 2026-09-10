@@ -4,9 +4,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-Personal Fedora workstation provisioning: dnf package installs plus dotfiles, for a Sway/Wayland
+Personal Fedora workstation provisioning: dnf package installs plus dotfiles, for a **COSMIC**
 desktop with Alacritty + fish + tmux + Neovim (LazyVim). Not a git repository and has no build,
 test, or lint tooling — the "programs" are bash/python scripts and declarative config files.
+
+The desktop was SwayFX + waybar + mako + gtklock + ulauncher + greetd/gtkgreet until the switch to
+COSMIC; `git log` has the whole thing if any of it is ever wanted back. Nothing of it survives in
+the tree.
 
 ## Layout and execution model
 
@@ -16,26 +20,27 @@ Each top-level directory is an independent, idempotent module with its own `inst
 | --- | --- | --- |
 | `base/` | core CLI tooling, RPM Fusion repos | — |
 | `containers/` | docker-ce, k3s (server, kubeconfig mode 644), writes `~/.kube/config` | — |
-| `ui/` | **swayfx**, waybar, mako, gtklock, ulauncher, greetd + gtkgreet, pipewire, mesa/vulkan, bluetooth, media; **writes `/etc/greetd/{config.toml,sway-config,gtkgreet.css,background.jpg,environments}`** (root, not symlinks) | `~/.config/{sway,waybar,mako,ulauncher,gtklock,gtk-3.0,gtk-4.0}` |
+| `cosmic/` | `@cosmic-desktop`, cosmic-greeter, xdg-desktop-portal-cosmic, mesa/vulkan, pipewire, bluetooth, media; **enables `cosmic-greeter.service`** and **removes the old sway stack** | — (deliberately nothing) |
 | `nvidia/` | the proprietary driver, branch picked from the GPU's PCI device id; **writes `/etc/modprobe.d/nvidia-ondemand.conf`** (root, not a symlink) and owns all GPU power policy | — |
 | `alacritty/` | — | `~/.config/alacritty` |
 | `fish/` | `chsh -s fish` | `~/.config/fish` |
 | `tmux/` | tmux | `~/.config/tmux` |
 | `nvim/` | neovim, rustup, uv, typst, build toolchain | `~/.config/nvim` |
-| `fonts/` | `rsms-inter-fonts`, `google-noto-sans-arabic-fonts`, `google-noto-color-emoji-fonts` | `~/.local/share/fonts`, `~/.config/fontconfig` |
+| `fonts/` | `rsms-inter-fonts`, `google-noto-sans-arabic-fonts`, `google-noto-color-emoji-fonts`, `google-noto-fonts-all` | `~/.local/share/fonts`, `~/.config/fontconfig` |
 | `scripts/` | — | `~/scripts` |
-| `apps/` | waterfox, discord, telegram, vlc, obs-studio, nautilus, obsidian; one `install.sh` for all of them, or `./install.sh <app>...` for a subset | — |
+| `apps/` | waterfox, discord, telegram, vlc, obs-studio, obsidian; one `install.sh` for all of them, or `./install.sh <app>...` for a subset | — |
+
+`wallpapers/` is not a module — just the image, kept in the repo so COSMIC's appearance settings
+have something local to point at.
 
 There is no top-level bootstrap script. Modules are run by hand and roughly in the order above
 (`base` first; `nvim/install.sh` sources `~/.cargo/env`, so it depends on rustup being present or
-installing it itself). `nvidia/` is only run on a machine that has the discrete card. Every
-directory under `ui/` — `greeter/` included — is plain config installed by the one `ui/install.sh`;
-there are no nested modules there.
+installing it itself). `nvidia/` is only run on a machine that has the discrete card.
 
 ### The symlink convention
 
-Every module links its *directory* into place with `ln -vfsn <repo dir> <target>`, so editing files
-in this repo is immediately live — there is no copy/apply step. Two consequences:
+Every module that has config links its *directory* into place with `ln -vfsn <repo dir> <target>`,
+so editing files in this repo is immediately live — there is no copy/apply step. Two consequences:
 
 - Never replace a symlinked target with a real directory; that breaks the whole model.
 - The `-n` (`--no-dereference`) is load-bearing. Without it `ln` follows a target that is already
@@ -44,8 +49,8 @@ in this repo is immediately live — there is no copy/apply step. Two consequenc
   rerun replaces the symlink, and a target that is a *real* directory fails loudly rather than
   nesting silently.
 
-`ui/install.sh` runs its symlinks *before* its `dnf` calls, on purpose: linking depends on no
-package, and under `set -e` a failed install would otherwise skip every link.
+**`cosmic/` is the exception, and it is a deliberate one** — see "COSMIC" below. It symlinks
+nothing, because the desktop's config is owned and rewritten by the desktop itself.
 
 `fish/config.fish` puts `~/scripts` on `PATH`, so everything in `scripts/` is a global command.
 
@@ -60,30 +65,88 @@ package, and under `set -e` a failed install would otherwise skip every link.
 - `k3s-up` / `k3s-down` — on-demand k3s lifecycle. k3s is deliberately **not** enabled at boot;
   `k3s-down` runs `k3s-killall.sh` and verifies only `k8s.io`-namespace shims are gone (Docker's
   `moby` shims must survive).
-- `screenshot`, `screenshot-window` — grim + slurp (`-o` for a whole output), save + `wl-copy` +
-  notify. Both exit quietly if the selection is cancelled.
-- `screen-record` — wf-recorder + slurp to an mp4 in `~/Videos/Recordings`; `-a` adds audio.
-  Re-running it stops an active recording (SIGINT, so the container is finalised) and copies the
-  path. Bound to `$mod+Print`; needs RPM Fusion's `ffmpeg` for libx264, which `ui/install.sh`
-  swaps in over Fedora's `ffmpeg-free`.
 - `gpu-down` — unloads the NVIDIA driver so the Quadro drops back to D3hot. The *only* manual GPU
   step, and deliberately the only script: nothing on this hardware can power the card down by
   itself, but everything that wants it brings the driver up on its own. See "Hybrid graphics".
 - `prime-run` — runs one command on the discrete NVIDIA GPU via PRIME render offload, loading
   `nvidia_drm modeset=1` first if it is not already up. See "Hybrid graphics" below.
-- `scratchterm` — dropdown terminal on `$mod` + backtick (`bindsym $mod+grave`). Toggles an
-  alacritty with `app_id=scratchterm` in and out of sway's scratchpad, spawning it on first
-  use; the `for_window` rule in `ui/sway/config` floats it, sizes it 60x55 ppt and reveals it,
-  so the first press behaves like every later one. Hidden rather than killed, so the shell and
-  its jobs survive a toggle.
-- `kblayout` — waybar's keyboard-layout module, replacing the built-in `sway/language`. That one
-  builds its layout table once at startup from `IPC_GET_INPUTS` and goes permanently blank after a
-  suspend/resume, because the input add/remove churn sway emits on resume wipes it; nothing but a
-  waybar restart brings it back. This re-reads the layout from sway on every input event instead of
-  caching, so the churn heals itself. Wired as `"exec": "~/scripts/kblayout"` in `ui/waybar/config`.
 - `pdf2img` — pdftoppm wrapper (poppler-utils): `-f` format, `-r` DPI, `-p` page range, `-o` outdir.
 - `playvid`, `gentasks`, `calendar_svg` — fzf video picker; recurring-task markdown generator;
   SVG month calendar to clipboard.
+
+Five scripts went with the sway stack, all replaced by something COSMIC ships:
+
+| Removed | Replaced by |
+| --- | --- |
+| `screenshot`, `screenshot-window` | `cosmic-screenshot`, bound to `Print` by default |
+| `screen-record` | nothing CLI-shaped — see "Screen capture" |
+| `kblayout` | COSMIC's own keyboard-layout applet |
+| `scratchterm` | nothing; it was built on sway's scratchpad, which has no COSMIC equivalent |
+
+## COSMIC
+
+Stock, and stock on purpose. `cosmic/install.sh` installs the desktop and configures none of it.
+
+**The desktop's config is not in this repo, and cannot usefully be.** COSMIC stores settings as
+`~/.config/cosmic/<component>/v1/<key>` — one file per key, in RON — and cosmic-settings rewrites
+those files whenever a preference changes in the GUI. There is no direction of flow to reverse: the
+GUI is the source of truth. Symlinking that tree in here would reproduce the old ulauncher problem
+(a config directory the app owns and rewrites behind you) across the entire desktop, so the trade
+was made explicitly: the desktop is configured in cosmic-settings, and this repo installs it and
+stays out of the way.
+
+That is the one real ideological cost of the switch, and it is worth being honest about it: this
+repo's premise everywhere else is that config is source and the GUI is absent. For the desktop that
+is now inverted.
+
+The shipped defaults are readable, which is the fastest way to learn a key's shape before
+overriding it in the GUI:
+
+```
+/usr/share/cosmic/com.system76.CosmicComp/v1/
+/usr/share/cosmic/com.system76.CosmicSettings.Shortcuts/v1/defaults
+/usr/share/cosmic/com.system76.CosmicSettings.Shortcuts/v1/system_actions
+```
+
+The stock shortcuts are already vim-style and need no porting: `Super+h/j/k/l` focuses,
+`Super+Shift+h/j/k/l` moves, `Super+Ctrl+h/j/k/l` switches workspace, `Super+q` closes,
+`Super+Escape` locks. Tiling is per-workspace and toggled in the panel, not always-on.
+
+What to set by hand after the first login, since nothing here does it:
+
+- **Appearance** — wallpaper (`wallpapers/background.jpg`), accent colour, light/dark.
+- **Appearance → fonts** — interface font `Inter`, monospace `Hack Nerd Font Mono`. COSMIC does not
+  ask fontconfig for a generic, so `fonts/fontconfig/fonts.conf` does not reach it; it names
+  families outright and has its own picker.
+- **Input** — keyboard layouts, which is what `kblayout` used to work around.
+
+`cosmic-comp` is Smithay-based, not wlroots. Mostly invisible, with one exception that is not —
+see below.
+
+### Screen capture
+
+`cosmic-comp` implements **`ext-image-copy-capture-v1`**, not **`wlr-screencopy`**. Consequences,
+in the order they bite:
+
+- `grim` 1.5 speaks both, so it still works, and `slurp` only needs layer-shell, which cosmic-comp
+  has. The old `screenshot` scripts would in fact still run — they were dropped because
+  `cosmic-screenshot` is bound to `Print` out of the box and does the same save + copy + notify.
+- `wf-recorder` speaks **only** wlr-screencopy, so it cannot capture anything under COSMIC no
+  matter how it is invoked. `screen-record` and its `$mod+Print` binding are therefore gone rather
+  than ported, and `cosmic/install.sh` removes the package.
+- The replacement for recording is the portal: `xdg-desktop-portal-cosmic` provides ScreenCast, and
+  OBS (already in `apps/`) uses it. There is no drop-in CLI region-recorder in Fedora that speaks
+  either the portal or ext-image-copy — this is a genuine regression, not a rename.
+
+Verify any capture tool before trusting it, since the failure is a clean "no such protocol" at
+runtime rather than a build error:
+
+```
+wayland-info | grep -E 'screencopy|image_copy_capture'
+```
+
+`zwlr_data_control_manager_v1` *is* implemented, which is why `wl-copy`/`wl-paste` — and therefore
+nvim's `remote_clipboard.lua` — keep working unchanged.
 
 ## Fonts
 
@@ -101,7 +164,7 @@ Three faces, and which one you get depends on the script being rendered, not on 
   explicitly in `fonts.conf` rather than left to its own conf.d snippet, because those squatters
   are still installed and still claim those ranges.
 - **Hack Nerd Font** — monospace, vendored as .ttf in `fonts/Hack/` rather than packaged, for the
-  icon glyphs waybar, tmux and Neovim draw. Configs name the **`Hack Nerd Font Mono`** variant,
+  icon glyphs tmux and Neovim draw. Configs name the **`Hack Nerd Font Mono`** variant,
   whose icons are squeezed to one cell; plain `Hack Nerd Font` keeps their natural (often
   double-cell) width and overhangs a terminal grid.
 
@@ -111,9 +174,11 @@ stock answers, not to the faces this repo installs. That file is what makes an a
 generic land here. It lives *inside* the directory that is itself the font path, so fontconfig
 scans it for fonts and finds none; harmless, and it keeps the module self-contained.
 
-Note the two font packages that are **not** this module's: `ui/install.sh` installs
-`google-noto-fonts-all` (the Noto sans/serif that everything falls back to), and `nvim/install.sh`
-pulls a LaTeX toolchain whose texlive font packages land display faces like Antykwa Poltawskiego in
+`google-noto-fonts-all` — the sans/serif fallback the serif generic resolves to — is installed by
+this module now. It used to come in with the desktop module, which no longer exists.
+
+Note the other font packages that are **not** this module's: `nvim/install.sh` pulls a LaTeX
+toolchain whose texlive font packages land display faces like Antykwa Poltawskiego in
 `/usr/share/fonts`, where GUI font pickers surface them near the top of an alphabetical list.
 
 ### The browser
@@ -178,9 +243,13 @@ serif rows `Noto Serif`; every `:lang=ar` row gives `Noto Sans Arabic` except th
 gives `Noto Naskh Arabic`. `system-ui` has no rule of its own and needs none — Fedora already
 chains it to `sans-serif`, and both halves land correctly without one.
 
-Obsidian is the other Chromium-family app here, and it needs nothing: it bundles Inter and uses it
-by default. It only goes wrong if `textFontFamily`/`interfaceFontFamily` is set in a vault's
-`.obsidian/appearance.json`, which is a stray click in its font picker away.
+None of this reaches COSMIC's own UI, which names families outright rather than asking for a
+generic — set those in cosmic-settings. It still governs GTK apps, Waterfox and anything else that
+asks for `sans-serif`.
+
+Obsidian needs nothing: it bundles Inter and uses it by default. It only goes wrong if
+`textFontFamily`/`interfaceFontFamily` is set in a vault's `.obsidian/appearance.json`, which is a
+stray click in its font picker away.
 
 It is `apps/install.sh obsidian`, and the only app in that module installed from an AppImage rather
 than a package or an rpm — so it also writes its own `~/.local/share/applications` entry, and `fuse
@@ -190,59 +259,6 @@ carrying an x86_64 `.AppImage`, because `/releases/latest` is the *Android* buil
 (desktop and mobile ship from the same repo); and the icon is pulled by running the downloaded image
 with `--appimage-extract`, since `.DirIcon` is only a symlink into `usr/share`. Rerunning it is how
 you update — unlike `discord`, it is deliberately unguarded.
-
-## The launcher
-
-`ulauncher`, bound to `$mod+d` in `ui/sway/config`, replacing fuzzel. Two things about it are
-different in kind from what it replaced, and both are why there is more wiring than a `set
-$launcher` line:
-
-- **It is a daemon.** fuzzel was spawned per invocation and exited on selection; `ulauncher-toggle`
-  only sends a dbus message (`net.launchpad.ulauncher.toggle_window`) to an instance that must
-  already be running. `ui/install.sh` therefore runs `systemctl --user enable --now
-  ulauncher.service`. Fedora ships that unit `WantedBy=graphical-session.target`, which the
-  `include /etc/sway/config.d/*` line already activates — so nothing needs an `exec` in the sway
-  config, and the launcher is up before the first keypress rather than on it.
-- **It runs under XWayland.** Fedora's unit pins `GDK_BACKEND=x11` in its `ExecStart`. That is the
-  packager's decision, not this repo's, and it is why the `for_window` rule matches `class=
-  "Ulauncher"` — an XWayland window has no `app_id`. The rule lists the `app_id` form as well, so
-  it keeps working if that pin is ever dropped. Without the rule sway tiles the launcher into the
-  layout instead of floating it. `ulauncher-toggle` also ends in a `wmctrl -a` call, which is X11
-  and may warn under sway; the dbus message above it is what actually does the work.
-
-Config is `ui/ulauncher/`, symlinked to `~/.config/ulauncher` like every other module — but it
-breaks two of this repo's usual assumptions, and both are worth knowing before editing.
-
-**Edits are not live.** Everywhere else here, changing a file in the repo takes effect on the next
-use. ulauncher compiles its stylesheet exactly once, in `init_theme()` at window construction, and
-the running daemon keeps serving what it built at startup — so a theme edit shows nothing until
-`systemctl --user restart ulauncher.service`. `ui/install.sh` ends with that restart for the same
-reason. This is the single most likely reason a palette change appears to do nothing.
-
-**It writes back.** ulauncher owns this directory at runtime: `settings.json` is rewritten whenever
-a preference changes in its GUI, `ext_preferences/` appears when an extension is configured, and —
-because a *user* theme's generated stylesheet is written into the theme directory itself rather
-than into `~/.cache` — `generated.css` lands inside `ui/ulauncher/user-themes/frost/`. The last
-two are in `.gitignore`, the repo's only one — though its patterns still say `wm/` and so no longer
-match; see "Known inconsistencies". `settings.json` is tracked on purpose, so a GUI
-change shows up as a diff to keep or discard. Extensions land in `~/.local/share/ulauncher`,
-outside the repo.
-
-`ui/install.sh` also has to move an existing `~/.config/ulauncher` aside before linking. ulauncher
-is the only app here that creates its own config directory, so on any machine where it has run
-before the module did, the symlink target is a real directory and `ln -f` cannot overwrite it —
-which under `set -e` would abort the rest of the script.
-
-The frosted-light palette matches `ui/waybar/style.css`, `ui/gtklock/style.css` and
-`ui/greeter/gtkgreet.css` (**not** `alacritty/colors.toml` any more — the terminal stays gruvbox
-dark on purpose). It lives in `ui/ulauncher/user-themes/frost/`, which is ulauncher's
-theme format, not a config file: `manifest.json` (validated — it must carry `manifest_version`,
-`name`, `display_name`, `matched_text_hl_colors` and *both* css keys, and both files must exist)
-plus two stylesheets. `extend_theme: "light"` means ulauncher generates a stylesheet that
-`@import`s the stock light theme and appends ours, so `theme.css` holds only `@define-color`
-overrides and every selector and size comes from upstream. The GTK 3.20 file exists because
-`caret-color` needs that version; it imports the other. One trap: upstream misspells one variable
-as `prefs_backgroud`, and the typo has to be repeated to override it.
 
 ## Neovim
 
@@ -256,7 +272,8 @@ LazyVim, and its tmux counterpart is the `is_vim` block in `tmux/tmux.conf`).
 herdr it installs a custom `vim.g.clipboard` that always emits OSC 52 on yank (so copies reach the
 client machine) while preferring local `wl-copy`/`wl-paste` when a Wayland display exists. It walks
 `/proc` ancestors to detect herdr. Alacritty cooperates via `osc52 = "CopyPaste"` and CSI-u encodings
-for Shift/Alt-Shift+Return in `alacritty/alacritty.toml`.
+for Shift/Alt-Shift+Return in `alacritty/alacritty.toml`. Unaffected by the COSMIC switch — the
+Wayland half depends on `wl-clipboard`, which cosmic-comp supports.
 
 `after/ftplugin/tex.lua` binds `<leader>m` to save-all + async `make` at the nearest Makefile root,
 routing errors into the quickfix list via the tex `errorformat`.
@@ -282,57 +299,17 @@ same silent way.
 
 - Bash scripts: `#!/usr/bin/env bash` + `set -Eeuo pipefail`, guard external repo/tool installs with
   `rpm -q` / `dnf repolist | grep` / `command -v` checks so reruns are safe.
-- Everything under `ui/` uses the frosted-light palette (see "The look"); `alacritty/` and
-  `tmux/` stay gruvbox dark. sway mod is `Mod4`, vim-style
-  `h/j/k/l` navigation throughout.
+- `alacritty/` and `tmux/` are gruvbox dark and stay that way; a light terminal was never wanted.
+  The desktop's own palette is whatever is set in cosmic-settings and is not tracked here.
 - No absolute `/home/<user>` paths anywhere; the repo assumes only that it is checked out at
-  `$HOME/fedora`. Where a config format expands variables, it uses `$HOME` — sway runs `output bg`
-  paths through wordexp(3), and sway `exec` / waybar `on-click` both hand their command to `sh(1)`.
-  Where a format does *not* expand (gtklock's glib key file, GTK CSS), the path is either passed in
-  from a caller that does, or written relative to the file itself.
+  `$HOME/fedora`.
 
 ## Known inconsistencies
 
-None outstanding. The `wm/` → `ui/` rename is now complete — every path, symlink and comment follows
-it, `.gitignore` included. Previously listed and resolved: the `Print` binding points at `screenshot`
-on `PATH`, `$filemanager` is `nautilus`, `pstats` no longer calls itself `gitcheck`, `wofi` /
-`hyprland/*` waybar modules are gone (the bar uses `sway/workspaces`), and `fuzzel` is replaced by
-`ulauncher`.
-
-## The look
-
-Frosted light: near-black text on translucent white, one blue accent (`#0071e3`), one red for urgent
-(`#d70015`). It covers everything under `ui/` — sway borders, waybar, mako, gtklock, gtkgreet,
-ulauncher, GTK. `alacritty/` and `tmux/` deliberately stay gruvbox dark; a light terminal was not
-wanted.
-
-**The compositor is SwayFX, not sway.** This is the part that is not a config choice. wlroots
-implements no blur at all — `sway(5)` does not mention it and there is no flag — so `blur`,
-`corner_radius`, `shadows` and `layer_effects` in `ui/sway/config` are swayfx-only directives that
-stock sway rejects as unknown commands. SwayFX is a drop-in fork: same config syntax, same
-`/usr/bin/sway` binary name, so greetd, `sway-systemd` and every keybinding keep working untouched.
-It is not packaged in Fedora, so `ui/install.sh` enables the upstream project's own COPR
-(`swayfx/swayfx`) and installs with `--allowerasing`, since swayfx and Fedora's `sway` own the same
-binary and conflict.
-
-Two things about the blur are worth knowing before editing any of it:
-
-- **Blur needs something translucent to show through.** An opaque window renders the whole effect
-  invisible, which is why `ui/sway/config` sets `opacity` on the terminals and every stylesheet uses
-  `rgba(255, 255, 255, α)` rather than a flat white. Raising an alpha to 1.0 does not "make it
-  cleaner", it turns the blur off for that surface.
-- **Layer surfaces are not windows.** waybar and mako are layer-shell clients and are not covered by
-  the window-level rules; each opts in by namespace through `layer_effects "waybar"` and
-  `layer_effects "notifications"`. ulauncher is the odd one out and needs neither: Fedora's unit pins
-  `GDK_BACKEND=x11`, so it arrives as an ordinary XWayland *window* and picks up the window rules.
-
-**gtklock and gtkgreet get no compositor blur at all**, and this is the trap. A lock screen is an
-`ext-session-lock` surface and the greeter runs inside its own compositor; in both cases there is
-nothing behind them for swayfx to sample, so `blur enable` does exactly nothing there. Their blur is
-baked into an image instead: `ui/install.sh` generates `ui/wallpapers/background-blurred.jpg` from
-`background.jpg` with ffmpeg's `gblur`, and regenerates it whenever the sharp one is newer. The sharp
-file stays the single source of truth — replace it and rerun. The blurred copy is also what gets
-installed to `/etc/greetd/background.jpg`, so login and lock match.
+None outstanding. The COSMIC migration is complete: `ui/` is gone in full, the five sway-dependent
+scripts with it, and nothing in the tree references sway, waybar, mako, gtklock, gtkgreet, ulauncher
+or fuzzel outside `cosmic/install.sh`'s removal list and this file's history notes. `nautilus` left
+`apps/` with it — `cosmic-files` is the file manager now.
 
 ## Hybrid graphics
 
@@ -342,7 +319,7 @@ card has no display attached.
 
 ### Installing the driver
 
-`nvidia/install.sh` is its own module, deliberately separate from `ui/` — it needs RPM Fusion
+`nvidia/install.sh` is its own module, deliberately separate from the desktop — it needs RPM Fusion
 nonfree from `base/`, and it is the one module that is meaningless on a machine without the card.
 Branch selection is the whole reason it is a script and not a `dnf install` line:
 
@@ -374,35 +351,26 @@ Branch selection is the whole reason it is a script and not a `dnf install` line
   `modprobe nvidia_drm modeset=1`. Not a convenience: `nvidia_drm` is the one module the setuid
   `nvidia-modprobe` helper cannot load (it covers `nvidia`, `nvidia_uvm` and `nvidia_modeset` only),
   so without the rule `prime-run` works when typed at a shell and fails from a `.desktop` entry or a
-  sway keybinding — where sudo has no terminal to prompt in and the app silently falls back to
+  COSMIC shortcut — where sudo has no terminal to prompt in and the app silently falls back to
   Intel. The file is validated with `visudo -c` on a temp copy before install, because a broken file
   in `sudoers.d` breaks `sudo` outright.
 - Finally it installs `nvidia-ondemand.conf`, disables `nvidia-powerd`, and calls `gpu-down` — so
   the script ends with the card unbound and in D3hot rather than lit up. **All GPU power policy
-  lives in this module**, not in `ui/`. It used to be split across both, which meant the state you
-  ended in depended on which module you ran last: `nvidia/` finished by loading the driver while
-  `ui/` finished by unloading it.
+  lives in this module**, and always should: it used to be split with the desktop module, which
+  meant the state you ended in depended on which of the two you ran last.
 
 The compositor is pinned to the iGPU and the dGPU is opt-in per application:
 
 - **Pin** — done by absence, not by environment. The NVIDIA modules are blacklisted at boot (see
-  "Powering the card down"), so no nvidia DRM node exists when greetd starts sway: `/dev/dri` holds
-  only the Intel card and wlroots has nothing else it could pick. If the driver *were* loaded at
-  boot, `nvidia_drm.modeset=1` would make wlroots enumerate the Quadro and possibly take it as the
-  primary renderer — every frame drawn on the dGPU and copied back to Intel for scanout.
+  "Powering the card down"), so no nvidia DRM node exists when the greeter starts: `/dev/dri` holds
+  only the Intel card and the compositor has nothing else it could pick. If the driver *were*
+  loaded at boot, `nvidia_drm.modeset=1` would make it enumerate the Quadro and possibly take it as
+  the primary renderer — every frame drawn on the dGPU and copied back to Intel for scanout.
 
-  This now covers *two* wlroots compositors, not one: since the greeter is gtkgreet hosted in its
-  own sway (see "Lock screen and login"), the login screen would pick the wrong GPU on exactly the
-  same terms as the session. The blacklist is upstream of both, so both are covered by the one
-  mechanism.
-
-  Historical trap, still worth knowing before reverting to tuigreet: `WLR_DRM_DEVICES` inlined into
-  tuigreet's `--cmd` does not work. tuigreet does not word-split that value before passing it to
-  greetd, so `--cmd 'env WLR_DRM_DEVICES=... sway'` makes greetd exec a binary named
-  `env WLR_DRM_DEVICES=... sway`, which ENOENTs: PAM authenticates, the session opens and closes in
-  the same second, and the greeter reappears with no sway output in the journal. tuigreet's `--cmd`
-  must stay a single argv-safe token. greetd's own `command` has never had this problem — greetd(5)
-  says it is run by `sh(1)` — which is why the current `command = "sway --config ..."` is fine.
+  This covers the greeter as well as the session: cosmic-greeter runs its own cosmic-comp instance,
+  and the blacklist is upstream of both, so one mechanism covers both. It survived the sway →
+  COSMIC switch untouched for exactly that reason — it never depended on which compositor was
+  running, only on which device nodes existed.
 - **Opt in, graphics** — `scripts/prime-run <cmd>` sets `__NV_PRIME_RENDER_OFFLOAD` plus the per-API
   vendor selectors (GLX by name, EGL by narrowing the glvnd vendor list, Vulkan via
   `__VK_LAYER_NV_optimus`). Offload is client-side, so it works with the compositor on Intel: the
@@ -413,12 +381,12 @@ The compositor is pinned to the iGPU and the dGPU is opt-in per application:
   than defensive. Note it checks that the parameter reads `Y`, not merely that the module is loaded:
   `modeset` is fixed at load time and cannot be changed on a live module, so `nvidia_drm` brought up
   by something else without it needs a *reload*, and testing only for the module leaves exactly the
-  silent Intel fallback the guard exists to prevent. Nothing else on this machine sets it: there is no such default in
-  `/usr/lib/modprobe.d`, none on the kernel cmdline, and `nvidia-modprobe` — the helper a CUDA
-  process trips — brings up `nvidia` and `nvidia_uvm` but never `nvidia_drm`. Without it `prime-run`
-  fails *silently*: the variables are set, the app starts, and it renders on the Intel GPU anyway.
-  That is worse when the driver is already loaded for compute, because then every obvious check
-  (`lsmod | grep nvidia`, `nvidia-smi`) looks healthy.
+  silent Intel fallback the guard exists to prevent. Nothing else on this machine sets it: there is
+  no such default in `/usr/lib/modprobe.d`, none on the kernel cmdline, and `nvidia-modprobe` — the
+  helper a CUDA process trips — brings up `nvidia` and `nvidia_uvm` but never `nvidia_drm`. Without
+  it `prime-run` fails *silently*: the variables are set, the app starts, and it renders on the
+  Intel GPU anyway. That is worse when the driver is already loaded for compute, because then every
+  obvious check (`lsmod | grep nvidia`, `nvidia-smi`) looks healthy.
 - **Opt in, compute** — nothing to do. CUDA (notebooks, torch, tensorflow, anything linking
   `libcuda.so`) addresses the card directly and never goes through the compositor's render path, so
   `prime-run` is neither needed nor useful there. Caveat is hardware, not config: the M1000M is
@@ -464,74 +432,48 @@ So a machine can very easily sit at `D0` all day with `nvidia-smi` showing no pr
 which looks like the "idle" success case and is not. `gpu-down` is the only thing that fixes it, and
 running it is a habit, not a mechanism.
 
-This is also why there is only one script now. `gpu-up` existed to load the driver, but everything
-that needs it already does that — its one irreplaceable job was `modprobe nvidia_drm modeset=1`,
-which now lives in `prime-run` where it is actually needed. `gpu-run <cmd>` wrapped a command in
-load/unload, which is just `<cmd>` followed by `gpu-down`. Both were removed rather than kept as a
-symmetrical-looking `up`/`down`/`run` trio that mostly documented an ordering rule you had to
-remember.
+One thing to re-check now rather than assume: COSMIC's own daemons (`cosmic-settings-daemon`,
+`cosmic-idle`) probe hardware more eagerly than the sway stack did. If `power_state` starts reading
+`D0` on a fresh boot with nothing offloaded, something in the session is tripping
+`nvidia-modprobe` — that would be new, and the blacklist is not what would be at fault.
 
 Nothing here is a manual step at *install* time. `nvidia/install.sh` writes the modprobe file,
 disables `nvidia-powerd` and drops the driver once so the change lands without a reboot;
 `scripts/install.sh` symlinks the whole `scripts/` directory, so `gpu-down` and `prime-run` need no
-separate wiring. The root copies (`/etc/modprobe.d/nvidia-ondemand.conf`, everything under
-`/etc/greetd/`) are the parts that are *not* live-on-edit — changing either means rerunning its
-module.
-
-Nothing in `ui/greeter/` is live. All four files — `config.toml`, `sway-config`, `gtkgreet.css` and the
-wallpaper — are *copied* into `/etc/greetd/`, so a change needs `ui/install.sh` rerun. They
-cannot be symlinked the way every other module does it: the greeter runs as the `greetd` user and
-the home directory is `0700`, so nothing in this repo is readable to it. That permission bit is the
-whole reason for the copy, and it is why the wallpaper is duplicated rather than shared with
-`ui/sway/config`.
-
-The script then restarts `greetd` itself — but only when sway is not running, since a restart takes
-greetd's VT and every session under it down with it. From inside a session it skips the restart and
-the change lands at the next logout. Run from a TTY it applies immediately, which is also how you
-recover from a config that bounces you off the greeter. The check is
-`pgrep -x -u "$(id -u)" sway`, and the `-u` is load-bearing: the greeter is *itself* a sway now, so a
-bare `pgrep -x sway` would always match and the recovery restart would never fire.
+separate wiring. The root copy (`/etc/modprobe.d/nvidia-ondemand.conf`) is the part that is *not*
+live-on-edit — changing it means rerunning the module.
 
 ## Lock screen and login
 
-Two separate things, easily conflated:
+Both are `cosmic-greeter`, and that is the whole section now — the same binary, the same look, one
+package. Under the old setup this took two programs (gtkgreet and gtklock) and a deliberate effort
+to make them mirror each other.
 
-- **Login** — `ui/install.sh` installs greetd + **gtkgreet**, which is the program gtklock was forked
-  from (Fedora's own package summary for gtklock is "Lock screen based on gtkgreet"). That is the
-  point: login and unlock are the same screen, and `ui/greeter/gtkgreet.css` deliberately mirrors
-  `ui/gtklock/style.css` — same frosted-light palette, same blurred wallpaper, same card.
+- **Login** — `cosmic-greeter` is a greetd greeter. greetd itself stays; what changed is which
+  config it starts with. The package ships `/etc/greetd/cosmic-greeter.toml` and a unit that runs
+  `greetd --config /etc/greetd/cosmic-greeter.toml`, aliased to `display-manager.service`. So
+  `cosmic-greeter.service` and the plain `greetd.service` this repo used to configure are mutually
+  exclusive — both want vt1 — and `cosmic/install.sh` disables the old one before enabling the new.
 
-  gtkgreet is a Wayland client, not a standalone program, so it needs a compositor to live in.
-  `config.toml` therefore starts **sway** with a greeter-only config (`ui/greeter/sway-config`) whose
-  last line is `exec 'gtkgreet …; swaymsg exit'`. The `swaymsg exit` is load-bearing: greetd starts
-  the *compositor*, so sway must terminate once gtkgreet finalises a login or the greeter session
-  never ends and the user session never begins. That greeter config deliberately omits the
-  `include /etc/sway/config.d/*` the real one needs — the greeter is not a user session and must not
-  start `graphical-session.target` or the portals as the `greetd` user.
+  Nothing in `/etc/greetd/` is written by this repo any more. That directory was the awkward part
+  of the old setup: the greeter runs as its own user and `$HOME` is `0700`, so nothing here was
+  readable to it and four files had to be *copied* into `/etc/greetd/` and re-copied on every edit.
+  COSMIC's greeter reads the user's own COSMIC config over its daemon instead, so the copies are
+  gone along with the "this part is not live" caveat.
 
-  Two things gtkgreet writes in Pango markup, and markup beats CSS, so they are **not** styleable:
-  the clock's size (`<span size='32000'>`, 32pt on the focused output) and the failed-login text
-  colour (`<span color="red">`). Everything else about them — family, weight, colour of the clock —
-  still takes CSS. Widget names for selectors are `#window`, `#clock`, `#body` (the card),
-  `#input-field` and `#command-selector`; they are *not* the same names gtklock uses.
+  `cosmic/install.sh` does **not** restart the greeter, on purpose: a restart takes its VT and every
+  session under it down with it, so the change lands at the next logout.
 
-  `tuigreet` is still installed on purpose although nothing references it. It is the recovery
-  greeter — no compositor, no GPU, no stylesheet — so pointing `command` back at
-  `tuigreet --time --remember --cmd sway` from a TTY is a guaranteed way back in.
+  There is deliberately no autologin. greetd's `[initial_session]` starts a session with no
+  authentication at all, and the first login after a shutdown then skips the password entirely.
 
-  There is deliberately **no `[initial_session]`** in `ui/greeter/config.toml`: that is greetd's
-  autologin, and it starts a session with no authentication at all, so the first login after a
-  shutdown skipped the password entirely.
-- **Lock** — `gtklock` (`ui/gtklock/`), driven by `set $lock` in `ui/sway/config`, which the
-  keybinding and both swayidle hooks share; waybar's lock button repeats the same command. That is
-  also where `-s` names the stylesheet, because `ui/gtklock/config.ini` is a glib key file with no
-  variable expansion and a `style=` key there would have to spell out an absolute path. `style.css`
-  in turn reaches the wallpaper as `url("../wallpapers/…")`, which GTK resolves against the
-  directory of the path it was handed — symlinks not followed, so the `-s` argument has to be the
-  repo path and not `~/.config/gtklock/style.css`, which would look in `~/.config/wallpapers`. swayidle's `before-sleep` hook is the important one: there is no
-  `bindswitch` for the lid, so lid-close falls through to logind's `HandleLidSwitch=suspend` and
-  that hook is all that stands between reopening the lid and a live session.
+- **Lock** — `Super+Escape` by default, which runs `loginctl lock-session`; `cosmic-idle` handles
+  the idle and before-sleep cases, including lid-close, which falls through to logind's
+  `HandleLidSwitch=suspend`. cosmic-greeter is an `ext-session-lock` client, so the compositor owns
+  the lock and a crashed locker cannot fall through to the desktop — the same guarantee gtklock gave.
 
-Upstream `swaylock` was replaced because it draws only a ring — no field to type into, no clock —
-and `swaylock-effects` is not packaged for Fedora. gtklock is an `ext-session-lock` client, so the
-compositor owns the lock and a crashed locker cannot fall through to the desktop.
+**Recovery.** `tuigreet` was the recovery greeter and is removed with the rest of the sway stack;
+greetd's built-in `agreety` replaces it at no install cost. If the greeter ever fails to come up,
+log in on another VT and set `command = "agreety --cmd start-cosmic"` in
+`/etc/greetd/cosmic-greeter.toml`, then restart `cosmic-greeter.service`. Worth knowing *before*
+needing it, since the greeter is the one thing that cannot be debugged from inside the session.
