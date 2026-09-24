@@ -25,10 +25,10 @@ Each top-level directory is an independent, idempotent module with its own `inst
 | `alacritty/` | — | `~/.config/alacritty` |
 | `fish/` | `chsh -s fish` | `~/.config/fish` |
 | `tmux/` | tmux | `~/.config/tmux` |
-| `nvim/` | neovim, rustup, uv, typst, build toolchain | `~/.config/nvim` |
+| `nvim/` | neovim, rustup, uv, typst, Go, protoc + the Go protoc plugins, build toolchain | `~/.config/nvim` |
 | `fonts/` | `rsms-inter-fonts`, `google-noto-sans-arabic-fonts`, `google-noto-color-emoji-fonts`, `google-noto-fonts-all` | `~/.local/share/fonts`, `~/.config/fontconfig` |
 | `scripts/` | — | `~/scripts` |
-| `apps/` | waterfox, discord, telegram, vlc, obs-studio, obsidian; one `install.sh` for all of them, or `./install.sh <app>...` for a subset | — |
+| `apps/` | discord, telegram, vlc, obs-studio, mpv, zathura, syncthing, slack in one dnf transaction, plus the slack repofile; obsidian and zen from flathub | — |
 
 `wallpapers/` is not a module — just the image, kept in the repo so COSMIC's appearance settings
 have something local to point at.
@@ -52,7 +52,9 @@ so editing files in this repo is immediately live — there is no copy/apply ste
 **`cosmic/` is the exception, and it is a deliberate one** — see "COSMIC" below. It symlinks
 nothing, because the desktop's config is owned and rewritten by the desktop itself.
 
-`fish/config.fish` puts `~/scripts` on `PATH`, so everything in `scripts/` is a global command.
+`fish/config.fish` puts `~/scripts` on `PATH`, so everything in `scripts/` is a global command. It
+also puts `~/go/bin` there, which is where `go install` drops binaries and where `protoc` looks for
+its code generators — see "Go and protobuf".
 
 ## Scripts
 
@@ -135,8 +137,8 @@ in the order they bite:
   matter how it is invoked. `screen-record` and its `$mod+Print` binding are therefore gone rather
   than ported, and `cosmic/install.sh` removes the package.
 - The replacement for recording is the portal: `xdg-desktop-portal-cosmic` provides ScreenCast, and
-  OBS (already in `apps/`) uses it. There is no drop-in CLI region-recorder in Fedora that speaks
-  either the portal or ext-image-copy — this is a genuine regression, not a rename.
+  OBS (in `apps/`) uses it. There is no drop-in CLI region-recorder in Fedora that speaks either the
+  portal or ext-image-copy — this is a genuine regression, not a rename.
 
 Verify any capture tool before trusting it, since the failure is a clean "no such protocol" at
 runtime rather than a build error:
@@ -183,18 +185,29 @@ toolchain whose texlive font packages land display faces like Antykwa Poltawskie
 
 ### The browser
 
-Waterfox (`apps/install.sh waterfox`), from `isv:BrowserWorks` on OBS — the channel
-waterfox.net/download hands out for dnf, since Waterfox is in no Fedora repo and the
-third-party `hawkeye116477` repo most guides still name is unmaintained. The URL is per-release,
-so the script builds it from `rpm -E %fedora`. The guard checks the *release* in the installed
-repofile, not just the repo id — after a Fedora upgrade the old repofile is still there and still
-enabled, so an id-only check would skip the re-add and leave dnf pointed at the previous release's
-directory forever. Rerunning the script after an upgrade is therefore enough.
+Waterfox — installed, but **no longer provisioned by this repo**: it came from `apps/`, which is
+gone. It is the one app of that module's six kept on the machine, and it is now untracked, so what
+the script did is written down here because a reinstall or a Fedora upgrade means redoing it by
+hand.
 
-Being Gecko, it needs almost nothing from this module. Its Linux defaults for
+The package comes from `isv:BrowserWorks` on OBS — the channel waterfox.net/download hands out for
+dnf, since Waterfox is in no Fedora repo and the third-party `hawkeye116477` repo most guides still
+name is unmaintained. The repofile path is per-release:
+
+```
+sudo dnf config-manager addrepo --overwrite --from-repofile=\
+  "https://download.opensuse.org/repositories/isv:/BrowserWorks/Fedora_$(rpm -E %fedora)/isv:BrowserWorks.repo"
+```
+
+Check the *release* in the installed repofile, not just the repo id — after a Fedora upgrade the old
+repofile is still there and still enabled, so an id-only check skips the re-add and leaves dnf
+pointed at the previous release's directory forever.
+
+Being Gecko, it needs almost nothing on the font side. Its Linux defaults for
 `font.name.{serif,sans-serif,monospace}.*` are the literal strings `serif`, `sans-serif` and
 `monospace`, which go to fontconfig as generics — so `fonts.conf` is already in the path and there
-is nothing to redirect. The script writes exactly two prefs, into each profile's `user.js`:
+is nothing to redirect. Exactly two prefs go into each profile's `user.js`
+(`~/.waterfox/<profile>/user.js`):
 
 - `font.default.x-western` → `sans-serif`. This is the one Gecko gets "wrong" for this setup: it
   decides which generic an *unstyled* page gets, and its default is `serif`.
@@ -203,8 +216,8 @@ is nothing to redirect. The script writes exactly two prefs, into each profile's
 
 `user.js` rather than `prefs.js` because Waterfox reapplies it at every startup and rewrites
 `prefs.js` on exit — so it is both the durable place and safe to write while the browser is
-running. The script strips its own two lines before appending them, so a rerun neither duplicates
-them nor disturbs prefs added by hand.
+running. Strip those two lines before re-appending them, so an edit neither duplicates them nor
+disturbs prefs added by hand.
 
 This is the part that was much larger under Brave. Chromium's defaults are compiled in as the
 literal families `Times New Roman` / `Arial` / `Courier New` and it asks fontconfig for those **by
@@ -247,26 +260,14 @@ None of this reaches COSMIC's own UI, which names families outright rather than 
 generic — set those in cosmic-settings. It still governs GTK apps, Waterfox and anything else that
 asks for `sans-serif`.
 
-Obsidian needs nothing: it bundles Inter and uses it by default. It only goes wrong if
-`textFontFamily`/`interfaceFontFamily` is set in a vault's `.obsidian/appearance.json`, which is a
-stray click in its font picker away.
-
-It is `apps/install.sh obsidian`, and the only app in that module installed from an AppImage rather
-than a package or an rpm — so it also writes its own `~/.local/share/applications` entry, and `fuse
-fuse-libs` (which Fedora does not install by default) is what lets the image mount at all. Two
-things there are not obvious: the release is resolved by scanning the last 30 releases for one
-carrying an x86_64 `.AppImage`, because `/releases/latest` is the *Android* build as often as not
-(desktop and mobile ship from the same repo); and the icon is pulled by running the downloaded image
-with `--appimage-extract`, since `.DirIcon` is only a symlink into `usr/share`. Rerunning it is how
-you update — unlike `discord`, it is deliberately unguarded.
-
 ## Neovim
 
 Standard LazyVim starter (`init.lua` → `lua/config/lazy.lua`). Language extras are declared in
 `lazyvim.json`, not in Lua. Local customizations live in `lua/plugins/` (gruvbox colorscheme, oil.nvim
 as file explorer with `-` as the keymap, bufferline and snacks-explorer disabled in `disabled.lua`,
 vim-tmux-navigator in `tmux-navigator.lua` — its `keys` spec is what takes `<C-h>`/`<C-l>` over from
-LazyVim, and its tmux counterpart is the `is_vim` block in `tmux/tmux.conf`).
+LazyVim, and its tmux counterpart is the `is_vim` block in `tmux/tmux.conf` — and `proto.lua`, which
+is a lang extra LazyVim does not ship, assembled by hand).
 
 `lua/config/remote_clipboard.lua` is the one non-trivial piece: when running under tmux, SSH, or
 herdr it installs a custom `vim.g.clipboard` that always emits OSC 52 on yank (so copies reach the
@@ -295,6 +296,119 @@ spawned, and it exits immediately with `Unknown binary 'rust-analyzer' in offici
 `lsp.log`, with nothing surfaced in nvim. Without `rust-src`, stdlib completion and goto fail the
 same silent way.
 
+### Go and protobuf
+
+Go is the plain `golang` package; nothing about it needs explaining. protoc and its Go plugins do,
+because none of the three comes from where you would first look.
+
+- **protoc** is taken from the upstream release zip into `~/.local/bin`, the same shape as typst,
+  even though Fedora *does* package it. `protobuf-compiler` is **3.19.6 — 2022**, and has been for
+  several releases: protobuf's C++ runtime is ABI-coupled to abseil and grpc, so the three move
+  together or not at all, and in Fedora they have not. Upstream is v36. The gap is not cosmetic —
+  3.19 predates editions, so an `edition = "2023"` file does not compile to something older, it
+  fails to parse.
+
+  The zip's `include/google/` is copied to `~/.local/include/` and that is load-bearing: protoc
+  resolves the well-known types (`google/protobuf/timestamp.proto` and friends) from `../include`
+  relative to its own binary. Install only `bin/protoc` and every file importing one fails with
+  `File not found`, which reads like a typo in the `.proto` rather than a broken install.
+
+- **protoc-gen-go** and **protoc-gen-go-grpc** come from `go install`. protoc has no Go backend
+  compiled in — it discovers generators as `protoc-gen-<name>` on `PATH` and shells out, so
+  `--go_out` is a lookup for `protoc-gen-go`, not a built-in flag. Fedora packages
+  `golang-google-protobuf` (protoc-gen-go, at 1.31) but has no protoc-gen-go-grpc at all;
+  `grpc-plugins` is the C++/Python/Ruby/… set and carries no Go plugin, since the Go one lives in
+  grpc-go rather than in protobuf. `go install` is how upstream publishes both.
+
+  The install guard tests `$(go env GOPATH)/bin/<name>` directly rather than `command -v`: bash
+  running the script has not read `fish/config.fish`, so the binaries it just installed are not on
+  its own `PATH` and `command -v` would miss them on every rerun.
+
+- **gopls** is *not* installed here, unlike rust-analyzer. LazyVim's go extra declares it as an
+  lspconfig server, so mason installs and updates it. rust-analyzer is the exception in this module
+  and only because rustup's shim shadows it (see "Rust components").
+
+On the nvim side, `lazyvim.json` gains `lang.go` — which brings gopls, gofumpt/goimports, delve and
+the Go treesitter parsers. There is no `lang.proto` extra, so `lua/plugins/proto.lua` does that job
+by hand: the `proto` treesitter grammar, `buf_ls` as the language server, and `buf` in mason's
+`ensure_installed` to supply its binary. protoc is not part of that — it is a compiler, not a
+language server, and nvim never invokes it.
+
+## Applications
+
+`apps/` is one dnf transaction plus one `flatpak install` — no per-app functions, no subset
+argument. Eight packages, of which only two need explaining, both because they are not simply
+*there*:
+
+- **slack** is in no Fedora repo. Its own rpm drops `/etc/yum.repos.d/slack.repo` at install time,
+  which means dnf can have the package only *after* someone has installed it by hand. The script
+  writes that repofile first and inverts the order, so dnf does the whole job, updates included.
+  `gpgcheck=0` is reproduced from upstream's own file rather than chosen: the packages on
+  packagecloud are not signed with the key that file advertises, so turning it on makes the repo
+  unusable rather than safer.
+- **discord** comes from rpmfusion-nonfree, worth stating because the obvious assumption is the
+  opposite. Discord publishes only a rolling rpm behind a redirect, and this module used to fetch
+  that by hand and guard on `rpm -q`, since dnf could not update it and an unguarded rerun would
+  re-download ~100MB to install what was already in. RPM Fusion carries it; none of that was needed.
+
+Two smaller ones: `zathura` is only a shell and needs `zathura-pdf-mupdf` beside it or it opens
+nothing and says little about why; and `syncthing`'s package does nothing on its own, so the script
+enables `syncthing.service` as a **user** unit — a system unit would run it as root over files it
+does not own. Its UI is `http://localhost:8384`, and nothing syncs until a folder is added there.
+
+**Deliberately not here:** Alacritty, which has its own module because it carries config; and
+Waterfox, installed by hand and untracked (see "The browser").
+
+### Zen
+
+The other flatpak, and for the same reason as Obsidian's: it is in neither Fedora nor RPM Fusion,
+upstream publishes no rpm (the request for one is an open discussion, not a plan), and every dnf
+route to it is a single-maintainer COPR rebuilding the upstream tarball — the same shape as the
+unmaintained `hawkeye116477` Waterfox repo noted under "The browser", and the same failure mode when
+the maintainer stops. `app.zen_browser.zen` on Flathub is the Zen team's own build. It also sidesteps
+the per-Fedora-release repofile that makes Waterfox a manual step after every upgrade.
+
+Being a Firefox fork it inherits Gecko's font defaults, so "The browser" applies to it unchanged:
+`fonts.conf` is already in its path via the generics, and the same two `user.js` prefs
+(`font.default.x-western`, `font.default.ar`) are the only edits worth making. **Not applied by this
+script** — Zen's profile lives under `~/.var/app/app.zen_browser.zen/.zen/<profile>/`, and setting
+them is still a hand step.
+
+### Obsidian, and two different icon bugs
+
+Obsidian is the one app in the module that is not a package — it ships an AppImage, a Flatpak, a
+.deb and a Snap, and no rpm — so it comes from Flathub, whose build the Obsidian team has verified.
+The COPRs that exist are one-person rebuilds with no following.
+
+It was an AppImage unpacked into `~/.local` before that, and both shapes hit an icon bug. They are
+*different* bugs with the same symptom, which is why the first fix did not prevent the second.
+
+**The AppImage one — absolute `Icon=` paths.** The hand-written desktop entry named its icon by full
+path, `Icon=$HOME/.local/share/icons/hicolor/512x512/apps/obsidian.png`, and it appeared in the
+COSMIC launcher with no icon while every packaged app beside it drew one. The freedesktop spec
+permits an absolute path there; **COSMIC does not implement it** and resolves `Icon=` only through
+the XDG icon theme (pop-os/cosmic-epoch#2697). Any hand-rolled `.desktop` on this machine must put
+its icon at `~/.local/share/icons/hicolor/<size>/apps/<name>.png` and write `Icon=<name>`, bare.
+Packaging removes the problem outright, which is most of why nothing here is hand-unpacked now.
+
+**The Flatpak one — the Wayland `app_id`.** The exported entry is correct, so the *launcher* icon is
+right; what is wrong is a running window. Electron takes its Wayland app_id from `desktopName` in
+`package.json`, which Obsidian leaves unset, so the window reports the literal string `electron`.
+Nothing matches that — the entry is `md.obsidian.Obsidian.desktop`, and its `StartupWMClass` is an
+X11 property Wayland has no equivalent of — so the shell falls back to its generic application icon,
+which in COSMIC's theme is a cog. An open Obsidian shows the *Settings* icon.
+
+`install.sh` writes `--class=md.obsidian.Obsidian` into the flatpak's `user-flags.conf`, supplying
+the app_id by hand; the wrapper appends each line of that file to the argv, one flag per line and no
+quoting, which is the supported way in.
+
+The obvious alternative is deliberately not used. The wrapper documents `flatpak override
+--nosocket=wayland`, which drops to XWayland where the matching key comes from the binary name
+instead — and that is exactly how Discord and Slack avoid this, both being X11 clients by default
+with a `StartupWMClass` that matches. **On this machine it segfaults**: exit 139 immediately after
+loading the asar, not GPU-related (it does it with `--disable-gpu` too), because the manifest grants
+only `fallback-x11`. There is no X11 escape hatch here, so the app_id has to be fixed in place.
+
 ## Conventions
 
 - Bash scripts: `#!/usr/bin/env bash` + `set -Eeuo pipefail`, guard external repo/tool installs with
@@ -306,10 +420,39 @@ same silent way.
 
 ## Known inconsistencies
 
-None outstanding. The COSMIC migration is complete: `ui/` is gone in full, the five sway-dependent
+One outstanding, at the end of this section. The COSMIC migration itself is complete: `ui/` is gone in full, the five sway-dependent
 scripts with it, and nothing in the tree references sway, waybar, mako, gtklock, gtkgreet, ulauncher
 or fuzzel outside `cosmic/install.sh`'s removal list and this file's history notes. `nautilus` left
 `apps/` with it — `cosmic-files` is the file manager now.
+
+`apps/` no longer installs anything by hand. Both of the module's hand-rolled installs are gone —
+Discord's rolling rpm, replaced by the rpmfusion-nonfree package that was always there, and the
+Obsidian AppImage, replaced by the Flathub build. The per-app data of everything dropped along the
+way was cleared (`~/.config/{obsidian,discord,vlc}`, `~/.local/share/{TelegramDesktop,vlc}`); the
+notes in `~/vaults` were deliberately left alone, so only app-level config and the old AppImage's
+vault registry went. Obsidian's config now lives under `~/.var/app/md.obsidian.Obsidian/`.
+
+**The outstanding one is Waterfox.** It is the browser, it is installed, and nothing in this repo
+installs it — the one place where the tree describes something it does not provision. "The browser"
+carries the repofile and the two `user.js` prefs so the knowledge is not lost, but they are applied
+by hand now, and a Fedora upgrade needs the repofile re-added by hand too. Folding it back into
+`apps/` would close this; it was left out on purpose.
+
+`blueman` and `network-manager-applet` were the leftovers that survived the migration by working
+rather than by breaking. They were waybar's tray applets, they autostart from `/etc/xdg/autostart`,
+and `cosmic-applet-status-area` hosts StatusNotifierItems — so each drew a *second* icon in the
+panel beside the COSMIC applet that already covered it. Both are in the removal list now.
+`nm-connection-editor` deliberately is not: no tray icon, no autostart, and still the only way to
+reach VPN and 802.1x fields COSMIC's network page omits.
+
+That is the failure shape to expect from anything else left over from the old stack: a tray applet
+does not announce itself the way a compositor component does — the tell is a *duplicated* panel
+icon, not a missing one. Note also that killing such a process is not the whole fix and uninstalling
+the package is not either. systemd's xdg-autostart generator turns each `.desktop` into an
+`app-<name>@autostart.service` under the user manager, and that unit outlives both — `nm-applet` was
+found running from a `(deleted)` binary, its package already uninstalled, because nothing had
+restarted the user manager since. `systemctl --user daemon-reload` after the removal is what clears
+it; a logout does the same.
 
 ## Hybrid graphics
 

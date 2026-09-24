@@ -112,11 +112,24 @@ fi
 #
 # tuigreet goes too. It was the recovery greeter, and greetd's own built-in
 # agreety replaces it in that role at no install cost -- see CLAUDE.md.
+#
+# blueman and network-manager-applet are here for a third reason: they are not
+# sway-specific and they do not fail under COSMIC -- they work, which is the
+# problem. They were waybar's tray applets, they autostart from
+# /etc/xdg/autostart, and cosmic-applet-status-area is an SNI host, so each one
+# draws a second, redundant icon *beside* the COSMIC applet that already covers
+# it (cosmic-applet-bluetooth, cosmic-applet-network). Nothing requires either;
+# blueman-nautilus goes with nautilus, which left apps/ already.
+#
+# nm-connection-editor is deliberately not in this list. It ships no tray icon
+# and no autostart entry -- it is just the GTK connection dialog, which is still
+# the only way to reach some VPN and 802.1x fields COSMIC's network page omits.
 sway_stack=(
   swayfx sway-config-upstream sway-wallpapers sway-systemd
   swayidle swaylock swaybg
   waybar mako gtklock gtkgreet tuigreet ulauncher fuzzel
   wf-recorder xdg-desktop-portal-wlr
+  blueman blueman-nautilus network-manager-applet
 )
 to_remove=()
 for pkg in "${sway_stack[@]}"; do

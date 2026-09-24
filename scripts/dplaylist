@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+yt-dlp \
+  --yes-playlist \
+  --ignore-errors \
+  --continue \
+  --no-overwrites \
+  --merge-output-format mp4 \
+  --download-archive "downloaded.txt" \
+  -o "%(channel)s - %(playlist_title)s/%(playlist_index)03d - %(title)s [%(id)s].%(ext)s" \
+  "$@"
