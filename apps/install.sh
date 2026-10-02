@@ -76,3 +76,9 @@ fi
 
 echo "syncthing: http://localhost:8384"
 echo "obsidian: turn off the in-app auto-update, 'flatpak update' handles it"
+
+mkdir -p $HOME/.config/systemd/user/
+ln -vfsn $HOME/fedora/apps/obsidian-sync.service $HOME/.config/systemd/user/obsidian-sync.service
+ln -vfsn $HOME/fedora/apps/obsidian-sync.timer $HOME/.config/systemd/user/obsidian-sync.timer
+systemctl --user daemon-reload
+systemctl --user enable --now obsidian-sync.timer

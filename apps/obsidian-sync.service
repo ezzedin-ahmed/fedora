@@ -1,0 +1,6 @@
+[Unit]
+Description=Sync Obsidian vault with Git
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/git add -C $HOME/vaults/Me . && /usr/bin/git commit -C $HOME/vaults/Me -m "vault backup: $(date)"
